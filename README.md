@@ -2,6 +2,8 @@
 Preemptive task scheduling and async functionality on AVR
 
 
+Tested at the Atmega1284, have yet to try anything else.
+
 
 ```
 
