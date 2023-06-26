@@ -1,9 +1,17 @@
 /**
  * \file PreemptiveTaskScheduler.h
  * \author: Tim Robbins
- * \brief Preemptive task scheduling and async functionality. \n
+ * \brief Preemptive task scheduling and concurrent functionality. \n
  *
  * Terms to know \n
+ *
+ * Mutex: \n
+ * A mutual exclusion lock that are used by one thread to stop concurrent access to protected data and resources \n
+ *
+ *
+ * Coroutine: \n
+ * Programs that allow execution to be paused and resumed.
+ *
  *
  * 
  *
@@ -22,7 +30,7 @@
  * \n
  * \n
  * \n
- * This file treats tasks as async functionality and uses the definition as such \n
+ * This file treats tasks as concurrent processing and uses the definition as such \n
  * 
  *
  *

@@ -1,7 +1,7 @@
 /**
  * \file PreemptiveTaskScheduler.c
  * \author: Tim Robbins
- * \brief Preemptive task scheduling and async functionality.
+ * \brief Preemptive task scheduling and concurrent functionality.
  */
 #include <avr/io.h>
 #include <avr/interrupt.h>
