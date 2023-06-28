@@ -49,14 +49,6 @@ Latency has been getting bad after so many tasks are scheduled. Using timer over
 
 <br>
 
-### MAX_TASKS
-
-<br>
-
-MAX_TASKS macro currently can not be set to be more than the amount of normal tasks scheduled. I tried to replace with things such as empty tasks but it just breaks and triggers the MCU's reset
-
-<br>
-
 ### Circular array
 
 <br>
@@ -222,17 +214,36 @@ static void Task7(void)
 	}
 }
 
-static void Task8(void)
+static void Task9(void)
 {
 	volatile TaskIndiceType_t tid = GetCurrentTask();
-	
 	while(1)
 	{
 		if(GetTaskStatus(tid) == TASK_READY)
 		{
 			__asm__ __volatile__("nop");
+			PORTC ^= (1 << 7);
+			TaskSetYield(tid, 1000);
+		}
+	}
+}
+
+static void Task8(void)
+{
+	volatile TaskIndiceType_t tid = GetCurrentTask();
+	volatile bool hasBeenSet = false;
+	while(1)
+	{
+		if(hasBeenSet == false)
+		{
+			hasBeenSet = true;
+			ScheduleTask(Task9);
+		}
+		else if(GetTaskStatus(tid) == TASK_READY)
+		{
+			__asm__ __volatile__("nop");
 			PORTD ^= (1 << 0);
-			TaskSetYield(tid, 121);
+			TaskSetYield(tid, 787);
 		}
 	}
 }
