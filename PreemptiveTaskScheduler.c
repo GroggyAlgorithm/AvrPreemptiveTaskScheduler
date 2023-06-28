@@ -20,6 +20,7 @@ volatile TaskIndiceType_t m_TaskBlockCount = 0;
 ///The current task context
 volatile TaskContext_t *m_CurrentTaskContext;
 
+
 /**
 * \brief Returns the current task ID
 */
@@ -27,6 +28,8 @@ const inline TaskIndiceType_t GetCurrentTask()
 {
 	return m_TaskControl[m_TaskBlockIndex].taskID;
 }
+
+
 
 /**
 * \brief Returns the status of the specified task
@@ -40,6 +43,18 @@ inline TaskStatus_t GetTaskStatus(TaskIndiceType_t id)
 
 
 
+
+/**
+* \brief Sets the status of the specified task
+* \param index The task id to set at
+* \param status The status of the task
+*/
+inline void SetTaskStatus(TaskIndiceType_t id, TaskStatus_t status)
+{
+	 m_TaskControl[id].taskStatus = status;
+}
+
+
 /**
 * \brief Attaches a task that specifies a required ID
 *
@@ -50,7 +65,7 @@ void AttachIDTask(void (*func)(TaskIndiceType_t))
 	if(m_TaskBlockIndex < MAX_TASKS)
 	{
 		//Check for memory allowances
-		if(_TASK_STACK_START_ADDRESS(m_TaskBlockIndex) < RAMSTART)
+		if((uint16_t)_TASK_STACK_START_ADDRESS(m_TaskBlockIndex) < RAMSTART)
 		{
 			//Out of memory ):
 			return;	
@@ -59,7 +74,7 @@ void AttachIDTask(void (*func)(TaskIndiceType_t))
 		//Set the task ID
 		m_TaskControl[m_TaskBlockIndex].taskID = m_TaskBlockIndex;
 		
-		//Set the memory location for our task stack, was previously (void *)calloc(TASK_STACK_SIZE, sizeof(uint8_t));
+		//Set the memory location for our task stack
 		m_TaskControl[m_TaskBlockIndex]._taskStack = _TASK_STACK_START_ADDRESS(m_TaskBlockIndex);
 		
 		//Set the function
@@ -80,16 +95,16 @@ void AttachIDTask(void (*func)(TaskIndiceType_t))
 		
 		
 		//initialize stack pointer and program counter for our program execution
-		m_TaskControl[m_TaskBlockIndex].taskExecutionContext.sp.ptr = ((uint8_t *)m_TaskControl[m_TaskBlockIndex]._taskStack + sizeof(TASK_STACK_SIZE) - 1);
+		m_TaskControl[m_TaskBlockIndex].taskExecutionContext.sp.ptr = ((uint8_t *)m_TaskControl[m_TaskBlockIndex]._taskStack);
 		m_TaskControl[m_TaskBlockIndex].taskExecutionContext.pc.ptr = (void *)func;
 		
-#warning Hey, this isn't working anymore? what the heck! 
+#warning Hey, this isnt working anymore? what the heck! 
 		//Initialize register for argument 1
-		addr = (uint16_t)m_TaskControl[m_TaskBlockIndex].taskID;
+		addr = (TaskIndiceType_t)m_TaskControl[m_TaskBlockIndex].taskID;
 		m_TaskControl[m_TaskBlockIndex].taskExecutionContext.registerFile[24] = p[0];
 		m_TaskControl[m_TaskBlockIndex].taskExecutionContext.registerFile[25] = p[1];
-
-
+		
+		
 		////Initialize register for argument 2
 		//addr = (uint16_t)&m_TaskControl[m_TaskBlockIndex].taskID;
 		//m_TaskControl[m_TaskBlockIndex].taskExecutionContext.registerFile[22] = p[0];
@@ -99,14 +114,14 @@ void AttachIDTask(void (*func)(TaskIndiceType_t))
 		//addr = (uint16_t)(&m_TaskControl[m_TaskBlockIndex]);
 		//m_TaskControl[m_TaskBlockIndex].taskExecutionContext.registerFile[20] = p[0];
 		//m_TaskControl[m_TaskBlockIndex].taskExecutionContext.registerFile[21] = p[1];
-		
+		//
 		
 		
 		//Increment our index
 		m_TaskBlockIndex++;
 		
-		//Set our count to be equal to the index plus 1
-		m_TaskBlockCount = m_TaskBlockIndex+1;
+		//Set our count to be equal to the index
+		m_TaskBlockCount = m_TaskBlockIndex;
 	}
 }
 
@@ -121,6 +136,14 @@ void AttachTask(void (*func)(void))
 	//If we have the ability to add a new block...
 	if(m_TaskBlockIndex < MAX_TASKS)
 	{
+
+		//Check for memory allowances
+		if((uint16_t)_TASK_STACK_START_ADDRESS(m_TaskBlockIndex) < RAMSTART)
+		{
+			//Out of memory ):
+			return;	
+		}
+		
 		//Set the memory location for our task stack
 		m_TaskControl[m_TaskBlockIndex]._taskStack = _TASK_STACK_START_ADDRESS(m_TaskBlockIndex);
 		
@@ -136,18 +159,69 @@ void AttachTask(void (*func)(void))
 		//Set our default timeout
 		m_TaskControl[m_TaskBlockIndex].timeout = TASK_DEFAULT_TIMEOUT;
 		
-		uint16_t addr;
-		uint8_t *p = (uint8_t *)&addr;
-		
 		//initialize stack pointer and program counter for our program execution
-		m_TaskControl[m_TaskBlockIndex].taskExecutionContext.sp.ptr = ((uint8_t *)m_TaskControl[m_TaskBlockIndex]._taskStack + sizeof(TASK_STACK_SIZE) - 1);
+		m_TaskControl[m_TaskBlockIndex].taskExecutionContext.sp.ptr = ((uint8_t *)m_TaskControl[m_TaskBlockIndex]._taskStack);
 		m_TaskControl[m_TaskBlockIndex].taskExecutionContext.pc.ptr = (void *)func;
-		
+
 		//Increment our index
 		m_TaskBlockIndex++;
 		
-		//Set our count to be equal to the index plus 1
-		m_TaskBlockCount = m_TaskBlockIndex+1;
+		//Set our count to be equal to the index
+		m_TaskBlockCount = m_TaskBlockIndex;
+		
+		
+	}
+	
+	
+	
+}
+
+
+
+/**
+* \brief Attaches a task to the available tasks
+* \param func The function for running the task
+* \param index The position to attach at
+*/
+void AttachTaskAt(void (*func)(void), TaskIndiceType_t index)
+{
+	//If we have the ability to add a new block...
+	if(index < MAX_TASKS)
+	{
+		
+		//Check for memory allowances
+		if((uint16_t)_TASK_STACK_START_ADDRESS(index) < RAMSTART)
+		{
+			//Out of memory ):
+			return;	
+		}
+		
+		//Set the memory location for our task stack
+		m_TaskControl[index]._taskStack = _TASK_STACK_START_ADDRESS(index);
+		
+		//Set the task ID
+		m_TaskControl[index].taskID = index;
+		
+		//Set the function
+		m_TaskControl[index].task_func = (void *)func;
+		
+		//Default to blocked until tasks are dispatched
+		m_TaskControl[index].taskStatus = TASK_BLOCKED;
+		
+		//Set our default timeout
+		m_TaskControl[index].timeout = TASK_DEFAULT_TIMEOUT;
+		
+		//initialize stack pointer and program counter for our program execution
+		m_TaskControl[index].taskExecutionContext.sp.ptr = ((uint8_t *)m_TaskControl[index]._taskStack);
+		m_TaskControl[index].taskExecutionContext.pc.ptr = (void *)func;
+
+		//Increment our index
+		index++;
+		
+		//Set our count to be equal to the index
+		m_TaskBlockCount = index;
+		
+		
 	}
 	
 	
@@ -166,7 +240,7 @@ void DispatchTasks()
 	if(m_TaskBlockCount > 0)
 	{
 		//Disable Global interrupts
-		asm volatile("cli":::"memory");
+		__asm__ __volatile__("cli \n\t":::"memory");
 		
 		//Set our task index to the start
 		m_TaskBlockIndex = 0;
@@ -184,7 +258,8 @@ void DispatchTasks()
 			else
 			{
 				//Set to blocked
-				m_TaskControl[i].taskStatus = TASK_BLOCKED;
+				m_TaskControl[i].taskStatus = TASK_NONE;
+
 			}
 		}
 
@@ -192,6 +267,16 @@ void DispatchTasks()
 		//Make sure last task is set, is reserved. Set its ID as well_
 		m_TaskControl[MAX_TASKS].taskStatus = TASK_MAIN;
 		m_TaskControl[MAX_TASKS].taskID = MAX_TASKS;
+		m_TaskControl[MAX_TASKS]._taskStack = _TASK_STACK_START_ADDRESS(MAX_TASKS);
+		//Set the function
+		m_TaskControl[MAX_TASKS].task_func = (void *)_EmptyTask;
+		
+		//Set our default timeout
+		m_TaskControl[MAX_TASKS].timeout = TASK_DEFAULT_TIMEOUT;
+		
+		//initialize stack pointer and program counter for our program execution
+		m_TaskControl[MAX_TASKS].taskExecutionContext.sp.ptr = ((uint8_t *)m_TaskControl[MAX_TASKS]._taskStack + sizeof(TASK_STACK_SIZE) - 1);
+		m_TaskControl[MAX_TASKS].taskExecutionContext.pc.ptr = (void *)_EmptyTask;
 		
 		//Set our current task to the last possible task, this way when entering for the first time we will loop to the first
 		m_CurrentTaskContext = &m_TaskControl[MAX_TASKS].taskExecutionContext;
@@ -199,8 +284,8 @@ void DispatchTasks()
 		//Launch the ISR
 		_SCHEDULER_LAUNCH_ISR();
 		
-		//Enable Global interrupts
-		asm volatile("sei":::"memory");
+		//Re enable interrupts
+		__asm__ __volatile__("sei \n\t":::"memory");
 	}
 
 }
@@ -234,7 +319,7 @@ void TaskBlockOthers(TaskIndiceType_t tid)
 	for(TaskIndiceType_t i = 0; i < MAX_TASKS; i++)
 	{
 		//If it is not this task...
-		if(i != tid)
+		if(i != tid && m_TaskControl[i].taskStatus != TASK_NONE && m_TaskControl[i].taskStatus != TASK_MAIN)
 		{
 			//Set to blocked
 			m_TaskControl[i].taskStatus = TASK_BLOCKED;		
@@ -358,7 +443,7 @@ void TaskSetYield(TaskIndiceType_t taskIndex, TaskTimeout_t counts)
 __attribute__ ((weak)) void _TaskSwitch(void) 
 {
 	//If our new process is not set to blocked...
-	if(m_TaskControl[m_TaskBlockIndex].taskStatus != TASK_BLOCKED)
+	if(m_TaskControl[m_TaskBlockIndex].taskStatus != TASK_BLOCKED && m_TaskControl[m_TaskBlockIndex].taskStatus != TASK_NONE)
 	{
 		//If our task is set to YIELD...
 		if(m_TaskControl[m_TaskBlockIndex].taskStatus == TASK_YIELD)
@@ -381,6 +466,7 @@ __attribute__ ((weak)) void _TaskSwitch(void)
 			}
 		}
 	}
+	
 	//Increment our block index
 	m_TaskBlockIndex++;
 
@@ -392,12 +478,29 @@ __attribute__ ((weak)) void _TaskSwitch(void)
 	}
 	
 	//If our new process is not set to blocked...
-	if(m_TaskControl[m_TaskBlockIndex].taskStatus != TASK_BLOCKED)
+	if(m_TaskControl[m_TaskBlockIndex].taskStatus != TASK_BLOCKED && m_TaskControl[m_TaskBlockIndex].taskStatus != TASK_NONE)
 	{
-		//Set our current task context to the new execution context
-		m_CurrentTaskContext = &m_TaskControl[m_TaskBlockIndex].taskExecutionContext;	
+		if(m_TaskControl[m_TaskBlockIndex].taskStatus == TASK_SCHEDULED)
+		{
+			m_TaskControl[m_TaskBlockIndex].taskStatus = TASK_READY;
+			
+			m_TaskBlockIndex = MAX_TASKS;
+			m_CurrentTaskContext = &m_TaskControl[MAX_TASKS].taskExecutionContext;
+		}
+		else
+		{
+			//Set our current task context to the new execution context
+			m_CurrentTaskContext = &m_TaskControl[m_TaskBlockIndex].taskExecutionContext;
+		}
+		
+		
+		
 	}
-	
+	else
+	{
+		m_TaskBlockIndex = MAX_TASKS;
+		m_CurrentTaskContext = &m_TaskControl[MAX_TASKS].taskExecutionContext;
+	}
 	
 }
 

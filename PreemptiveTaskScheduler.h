@@ -3,55 +3,13 @@
  * \author: Tim Robbins
  * \brief Preemptive task scheduling and concurrent functionality. \n
  *
- * Terms to know \n
- *
- * Mutex: \n
- * A mutual exclusion lock that are used by one thread to stop concurrent access to protected data and resources \n
- *
- *
- * Coroutine: \n
- * Programs that allow execution to be paused and resumed.
- *
- *
- * 
- *
- *
- * Semaphore, from Wikipedia(https://en.wikipedia.org/wiki/Semaphore_(programming): \n
- *
- * In computer science, a semaphore is a variable or abstract data type used to control access to \n
- * a common resource by multiple threads and avoid critical section problems in a concurrent system \n
- * such as a multitasking operating system. Semaphores are a type of synchronization primitive. \n
- * A trivial semaphore is a plain variable that is changed (for example, incremented or decremented, or toggled) \n
- * depending on programmer-defined conditions.
- *
- * A useful way to think of a semaphore as used in a real-world system is as a record of how many units of \n
- * a particular resource are available, coupled with operations to adjust that record safely (i.e., to avoid race conditions) \n
- * as units are acquired or become free, and, if necessary, wait until a unit of the resource becomes available. \n
- * \n
- * \n
- * \n
- * This file treats tasks as concurrent processing and uses the definition as such \n
- * 
- *
+ * For descriptions of definitions, refer to attached README.md  \n
  *
  * Links for influence and resources: \n
  * https://github.com/arbv/avr-context \n
  * https://github.com/kcuzner/kos-avr + http://kevincuzner.com/2015/12/31/writing-a-preemptive-task-scheduler-for-avr/ \n
  * https://gist.github.com/dheeptuck/da0a347358e60c77ea259090a61d78f4 \n
  * https://medium.com/@dheeptuck/building-a-real-time-operating-system-rtos-ground-up-a70640c64e93 \n
- *
- * 
- *
- *
- * \todo \n
- * Task latency gets pretty bad after so many tasks are scheduled and the timing needs changed to accommodate and is difficult to tune \n
- * Sometimes blocking works, sometimes it don't  \n
- * The function args stopped working and now the id is not passing into its func ptr as it did earlier. \n
- * MAX_TASKS currently can not be set to be more than the amount of tasks added. \n
- * Tasks are currently in a circular array, would like to switch to using pointers \n
- * Semaphores for shared resources and locations, main task for handling resource requests, task sync for resource handling \n
- *
- *
  *
  */ 
 #ifndef __PREEMPTIVETASKSCHEDULER_H__
@@ -66,7 +24,7 @@ extern "C" {
 
 ///Maximum Amount Of Tasks Allowed
 #ifndef MAX_TASKS
-#define MAX_TASKS				8
+#define MAX_TASKS				10
 #endif
 
 ///The default timeout counts for tasks
@@ -81,7 +39,7 @@ extern "C" {
 
 ///The amount of ticks for our interrupt scheduler
 #ifndef TASK_INTERRUPT_TICKS
-#define	TASK_INTERRUPT_TICKS	0x2F0//0x2FF//F//0x3ff//0xff//1//00//0xffff
+#define	TASK_INTERRUPT_TICKS	0x2f0//0xffff//0x2F0//0x2FF
 #endif
 
 
@@ -96,7 +54,7 @@ extern "C" {
 #endif
 
 #if SCHEDULER_INT_VECTOR == TIMER3_OVF_vect
-		
+	
 	#define _SCHEDULER_STOP_TICK()		TCCR3B &= ~(1 << CS30 | 1 << CS31 | 1 << CS32)
 	#define _SCHEDULER_START_TICK()		TCCR3B |= (1 << CS30)
 	#define _SCHEDULER_LOAD_ISR_REG()	TCNT3 = 0xffff-TASK_INTERRUPT_TICKS
@@ -168,10 +126,8 @@ __asm__(".equ CONTEXT_OFFSET_R26,  9 \n\t");
 
 //----------------------------------------------------------------------------------------------------
 
-
 ///The data address for setting a stack start address
-#define _TASK_STACK_START_ADDRESS(_v) (((volatile void *)(RAMEND - ((_v)*TASK_STACK_SIZE+sizeof(TaskControl_t)+1) )))
-
+#define _TASK_STACK_START_ADDRESS(_v) (((void *)(RAMEND - ((_v)*TASK_STACK_SIZE+sizeof(TaskControl_t)+1) )))
 
 //DATA TYPES------------------------------------------------------------------------------------------
 
@@ -202,6 +158,7 @@ typedef enum TaskStatus_t
 	TASK_SLEEP,
 	TASK_YIELD,
 	TASK_MAIN, //Special reserved status for 'main' tasks
+	TASK_SCHEDULED,
 	TASK_NONE
 }
 /**
@@ -303,16 +260,6 @@ TaskControl_t;
 //VARIABLES-------------------------------------------------------------------------------------------
 
 
-/////An array block of our task control structures
-//extern volatile TaskControl_t m_TaskControl[MAX_TASKS+1];
-//
-/////The index for our Task control block structure
-//extern volatile TaskIndiceType_t m_TaskBlockIndex;
-//
-/////Count of the total items we've placed into the task control block
-//extern volatile TaskIndiceType_t m_TaskBlockCount;
-
-
 //----------------------------------------------------------------------------------------------------
 
 
@@ -324,7 +271,7 @@ TaskControl_t;
 #define TaskSchedulerLoadGlobalZPtr(__taskContext) "lds ZL, " #__taskContext " \n\t" "lds ZH, " #__taskContext "+1 \n\t"
 
 
-///Saves program context position
+///Saves program context position. See naked function for comments.
 #define _ASM_SAVE_CONTEXT(_z_load_cmds) \
 asm volatile(  \
 	"push r30 \n\t" \
@@ -403,7 +350,7 @@ asm volatile(  \
 
 
 
-///Restores program context position
+///Restores program context position. See naked function for comments.
 #define _ASM_RESTORE_CONTEXT(_z_load_cmds) \
 asm volatile( \
 	_z_load_cmds \
@@ -466,11 +413,11 @@ asm volatile( \
 
 
 
-///Restores a global pointers context
+///Restores a global pointers context. See naked functions for comments.
 #define ASM_SAVE_GLOBAL_PTR_CONTEXT(_ptr) \
 _ASM_SAVE_CONTEXT( "lds ZL, " #_ptr " \n\t" "lds ZH, " #_ptr "+1 \n\t")
 
-///Restores a global pointers context
+///Restores a global pointers context. See naked functions for comments.
 #define ASM_RESTORE_GLOBAL_PTR_CONTEXT(_ptr) \
 _ASM_RESTORE_CONTEXT( "lds ZL, " #_ptr " \n\t" "lds ZH, " #_ptr " + 1 \n\t")
 
@@ -481,9 +428,7 @@ _ASM_RESTORE_CONTEXT( "lds ZL, " #_ptr " \n\t" "lds ZH, " #_ptr " + 1 \n\t")
  */
 __attribute__((naked)) static void SaveContext(volatile TaskContext_t *taskContext)
 {
-	////Loads the variable and avoids compiler warnings?
-	//(void)taskContext;
-	//
+	
 	asm volatile
 	(
 		//Push the Z registers onto the stack
@@ -649,9 +594,7 @@ __attribute__((naked)) static void SaveContext(volatile TaskContext_t *taskConte
  */
 __attribute__((naked)) static void SwapContext(volatile TaskContext_t *taskContextA, volatile TaskContext_t *taskContextB)
 {
-	//(void)taskContextA; 
-    //(void)taskContextB;
-	//
+
 	/*
 		Save Context
 	*/
@@ -918,9 +861,6 @@ __attribute__((naked)) static void SwapContext(volatile TaskContext_t *taskConte
 __attribute__((naked)) static void RestoreContext(volatile TaskContext_t *taskContext)
 {
 	
-	//Loads the variable and avoids compiler warnings?
-	//(void)taskContext;
-	
 	/*
 		Restore Context
 	*/
@@ -1025,11 +965,16 @@ __attribute__((naked)) static void RestoreContext(volatile TaskContext_t *taskCo
 
 //FUNCTIONS-------------------------------------------------------------------------------------------
 
+
+
 extern __attribute__ ((weak)) void _TaskSwitch(void);
-extern const inline TaskIndiceType_t GetCurrentTask();
-extern inline TaskStatus_t GetTaskStatus(TaskIndiceType_t id);
+extern const TaskIndiceType_t GetCurrentTask();
+extern TaskStatus_t GetTaskStatus(TaskIndiceType_t id);
+extern void SetTaskStatus(TaskIndiceType_t id, TaskStatus_t status);
 extern void AttachIDTask(void (*func)(TaskIndiceType_t));
 extern void AttachTask(void (*func)(void ));
+extern void AttachTaskAt(void (*func)(void), TaskIndiceType_t index);
+
 extern void DispatchTasks();
 extern void _EmptyTask(void);
 #define TaskBlockProcess(_pid) m_TaskControl[_pid].taskStatus = TASK_BLOCKED
@@ -1043,6 +988,27 @@ extern void TaskSetYield(TaskIndiceType_t taskIndex, TaskTimeout_t counts);
 
 //----------------------------------------------------------------------------------------------------
 
+
+
+
+/**
+* \brief Adds and launches a task to the available tasks while running
+* \param func The function for running the task
+*/
+static void ScheduleTask(void (*func)(void))
+{
+	TaskIndiceType_t nid = 0;
+	
+	for(nid = 0; nid < MAX_TASKS; nid++)
+	{
+		if(GetTaskStatus(nid) == TASK_NONE)
+		{
+			AttachTaskAt(func, nid);
+			SetTaskStatus(nid, TASK_SCHEDULED);
+			break;
+		}
+	}
+}
 
 
 
