@@ -20,6 +20,10 @@ static TaskIndiceType_t m_TaskBlockCount = 0;
 ///The current task context
 volatile TaskControl_t *m_CurrentTask;
 
+///Semaphore value for accessing memory, registers, ex. adc, etc.
+static SemaphoreValueType_t m_semMemoryAccessor;
+
+
 
 
 /**
@@ -445,6 +449,69 @@ void DispatchTasks()
 
 
 /**
+* \brief Sets all tasks to run and starts the schedulers interrupt service. Keeps the final task as the passed task, especially useful for a kernel, imo
+* \param mainfunc Function pointer to what will be the manager, kernel, or anything else you want classified as the 'main' task
+*/
+void StartTasks(void (*mainfunc)(void))
+{
+	//If we have tasks to launch...
+	if(m_TaskBlockCount > 0)
+	{
+		//Disable Global interrupts
+		__asm__ __volatile__("cli \n\t":::"memory");
+		
+		//Set our task index to the start
+		m_TaskBlockIndex = 0;
+	
+		//For each task...
+		for(TaskIndiceType_t i = 0; i < MAX_TASKS; i++)
+		{
+			//If we're within range for our count to set to ready...
+			if(i < m_TaskBlockCount)
+			{
+				//Set to ready
+				m_TaskControl[i].taskStatus = TASK_READY;
+			}
+			//else...
+			else
+			{
+				//Set to blocked
+				m_TaskControl[i].taskStatus = TASK_NONE;
+
+			}
+		}
+
+		//Make sure we attach our ending task
+		//Make sure last task is set, is reserved. Set its ID as well
+		m_TaskControl[MAX_TASKS].taskStatus = TASK_MAIN;
+		m_TaskControl[MAX_TASKS].taskID = MAX_TASKS;
+		m_TaskControl[MAX_TASKS]._taskStack = _TASK_STACK_START_ADDRESS(MAX_TASKS);
+		
+		//Set the function
+		m_TaskControl[MAX_TASKS].task_func = (void *)mainfunc;
+		
+		//Set our default timeout
+		m_TaskControl[MAX_TASKS].timeout = TASK_DEFAULT_TIMEOUT;
+		
+		//initialize stack pointer and program counter for our program execution
+		m_TaskControl[MAX_TASKS].taskExecutionContext.sp.ptr = ((uint8_t *)m_TaskControl[MAX_TASKS]._taskStack + sizeof(TASK_STACK_SIZE) - 1);
+		m_TaskControl[MAX_TASKS].taskExecutionContext.pc.ptr = (void *)mainfunc;
+		
+		//Set our current task to the last possible task, this way when entering for the first time we will loop to the first
+		m_CurrentTask = &m_TaskControl[MAX_TASKS];
+		
+		//Launch the ISR
+		_SCHEDULER_LAUNCH_ISR();
+		
+		//Re enable interrupts
+		__asm__ __volatile__("sei \n\t":::"memory");
+	}
+
+}
+
+
+
+/**
 * \brief empty task
 *
 */
@@ -462,7 +529,7 @@ void _EmptyTask(void)
 * \brief Blocks all other tasks
 *
 */
-void TaskBlockOthers(TaskIndiceType_t tid)
+void BROKEN_TaskBlockOthers(TaskIndiceType_t tid)
 {
 	//Disable interrupts
 	asm volatile("cli":::"memory");
@@ -471,10 +538,17 @@ void TaskBlockOthers(TaskIndiceType_t tid)
 	for(TaskIndiceType_t i = 0; i < MAX_TASKS; i++)
 	{
 		//If it is not this task...
-		if(i != tid && m_TaskControl[i].taskStatus != TASK_NONE && m_TaskControl[i].taskStatus != TASK_MAIN)
+		if(i != tid)
 		{
-			//Set to blocked
-			m_TaskControl[i].taskStatus = TASK_BLOCKED;		
+			TaskStatus_t currentStatus = m_TaskControl[i].taskStatus;
+			
+			if(currentStatus == TASK_READY)
+			{
+				//Set to blocked
+				m_TaskControl[i].taskStatus = TASK_BLOCKED;
+			}
+			
+				
 		}
 	}
 
@@ -614,6 +688,106 @@ void TaskSetYield(TaskIndiceType_t taskIndex, TaskTimeout_t counts)
 
 
 /**
+* \brief Requests data is copied from the source address to the destination address, yielding when unable to access
+*/
+uint8_t YieldRequestDataCopy(TaskIndiceType_t id, void *memDestinationAddress, void *memSourceAddress, uint8_t bytes)
+{
+	uint8_t state = 0;
+	
+	while(m_semMemoryAccessor > 0)
+	{
+		TaskSetYield(id,10);
+	}
+	
+	//Disable Global interrupts
+	__asm__ __volatile__("cli \n\t":::"memory");
+	
+	m_semMemoryAccessor++;
+	
+	
+	//Re enable interrupts
+	__asm__ __volatile__("sei \n\t":::"memory");
+	
+	
+	if((TaskMemoryLocationType_t)memDestinationAddress < RAMEND && (bytes + (TaskMemoryLocationType_t)memDestinationAddress) < RAMEND)
+	{	
+		if((TaskMemoryLocationType_t)memSourceAddress < RAMEND && (bytes + (TaskMemoryLocationType_t)memSourceAddress) < RAMEND)
+		{
+			memcpy(memDestinationAddress, memSourceAddress, bytes);
+			state = 1;
+		}
+		
+	}
+	
+	//Disable Global interrupts
+	__asm__ __volatile__("cli \n\t":::"memory");
+	
+	m_semMemoryAccessor -= 1;
+	
+	if(m_semMemoryAccessor < 0)
+	{
+		m_semMemoryAccessor = 0;
+	}
+	
+	//Re enable interrupts
+	__asm__ __volatile__("sei \n\t":::"memory");
+	
+	return state;
+}
+
+
+
+/**
+* \brief Requests data is copied from the source address to the destination address, exiting when unable to access
+*/
+uint8_t RequestDataCopy(void *memDestinationAddress, void *memSourceAddress, uint8_t bytes)
+{
+	uint8_t state = 0;
+	
+	if(m_semMemoryAccessor > 0)
+	{
+		return 0;
+	}
+	
+	//Disable Global interrupts
+	__asm__ __volatile__("cli \n\t":::"memory");
+	
+	m_semMemoryAccessor++;
+	
+	
+	//Re enable interrupts
+	__asm__ __volatile__("sei \n\t":::"memory");
+	
+	
+	if((TaskMemoryLocationType_t)memDestinationAddress < RAMEND && (bytes + (TaskMemoryLocationType_t)memDestinationAddress) < RAMEND)
+	{	
+		if((TaskMemoryLocationType_t)memSourceAddress < RAMEND && (bytes + (TaskMemoryLocationType_t)memSourceAddress) < RAMEND)
+		{
+			memcpy(memDestinationAddress, memSourceAddress, bytes);
+			state = 1;
+		}
+		
+	}
+	
+	//Disable Global interrupts
+	__asm__ __volatile__("cli \n\t":::"memory");
+	
+	m_semMemoryAccessor -= 1;
+	
+	if(m_semMemoryAccessor < 0)
+	{
+		m_semMemoryAccessor = 0;
+	}
+	
+	//Re enable interrupts
+	__asm__ __volatile__("sei \n\t":::"memory");
+	
+	return state;
+}
+
+
+
+/**
 * \brief Handles task switching
 *
 */
@@ -739,7 +913,7 @@ __attribute__ ((weak)) void _TaskSwitch(void)
 */
 ISR(SCHEDULER_INT_VECTOR, ISR_NAKED)
 {
-	//Make sure interrupts are disabled
+	//Make sure other interrupts are disabled
 	__asm__ __volatile__("cli \n\t":::"memory");
 	
 	//Save our tasks context

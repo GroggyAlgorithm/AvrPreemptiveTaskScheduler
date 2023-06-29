@@ -10,6 +10,7 @@
  * https://github.com/kcuzner/kos-avr + http://kevincuzner.com/2015/12/31/writing-a-preemptive-task-scheduler-for-avr/ \n
  * https://gist.github.com/dheeptuck/da0a347358e60c77ea259090a61d78f4 \n
  * https://medium.com/@dheeptuck/building-a-real-time-operating-system-rtos-ground-up-a70640c64e93 \n
+ * https://www.cs.princeton.edu/courses/archive/fall16/cos318/projects/project3/p3.html
  *
  */ 
 #ifndef __PREEMPTIVETASKSCHEDULER_H__
@@ -24,7 +25,7 @@ extern "C" {
 
 ///Maximum Amount Of Tasks Allowed
 #ifndef MAX_TASKS
-#define MAX_TASKS				10
+#define MAX_TASKS				11//10
 #endif
 
 ///The default timeout counts for tasks
@@ -98,6 +99,8 @@ extern "C" {
 
 //CONSTANTS-------------------------------------------------------------------------------------------
 
+
+
 ///Constant size of our tasks stack
 #if MAX_TASK_STACK_SIZE > 0xFFFFFFFF
 const uint64_t TASK_STACK_SIZE = MAX_TASK_STACK_SIZE;
@@ -109,6 +112,8 @@ const uint16_t TASK_STACK_SIZE = MAX_TASK_STACK_SIZE;
 const uint8_t TASK_STACK_SIZE  = MAX_TASK_STACK_SIZE;
 #endif
 
+
+
 /*
 	ASM Constants
 */
@@ -116,20 +121,31 @@ const uint8_t TASK_STACK_SIZE  = MAX_TASK_STACK_SIZE;
 __asm__(".equ CONTEXT_OFFSET_PC_L, 33 \n\t");
 __asm__(".equ CONTEXT_OFFSET_PC_H, 34 \n\t");
 
+
+
 //Stack pointer high/low
 __asm__(".equ CONTEXT_OFFSET_SP_L, 35 \n\t");
 __asm__(".equ CONTEXT_OFFSET_SP_H, 36 \n\t");
+
+
 
 //Register back offset
 __asm__(".equ CONTEXT_OFFSET_R26,  9 \n\t");
 
 
+
 //----------------------------------------------------------------------------------------------------
+
+
 
 ///The data address for setting a stack start address
 #define _TASK_STACK_START_ADDRESS(_v) (((void *)(RAMEND - ((_v)*TASK_STACK_SIZE+sizeof(TaskControl_t)+1) )))
 
+
+
 //DATA TYPES------------------------------------------------------------------------------------------
+
+
 
 ///Data type for our semaphores
 typedef int8_t SemaphoreValueType_t;
@@ -258,6 +274,7 @@ typedef struct TaskControl_t
 *
 */
 TaskControl_t;
+
 
 
 //----------------------------------------------------------------------------------------------------
@@ -423,9 +440,12 @@ asm volatile( \
 #define ASM_SAVE_GLOBAL_PTR_CONTEXT(_ptr) \
 _ASM_SAVE_CONTEXT( "lds ZL, " #_ptr " \n\t" "lds ZH, " #_ptr "+1 \n\t")
 
+
+
 ///Restores a global pointers context. See naked functions for comments.
 #define ASM_RESTORE_GLOBAL_PTR_CONTEXT(_ptr) \
 _ASM_RESTORE_CONTEXT( "lds ZL, " #_ptr " \n\t" "lds ZH, " #_ptr " + 1 \n\t")
+
 
 
 /**
@@ -962,6 +982,7 @@ __attribute__((naked)) static void RestoreContext(volatile TaskContext_t *taskCo
 }
 
 
+
 //----------------------------------------------------------------------------------------------------
 
 
@@ -992,9 +1013,10 @@ extern TaskControl_t* _GetTaskControl(TaskIndiceType_t index);
 
 
 extern void DispatchTasks();
+extern void StartTasks(void (*mainfunc)(void));
 extern void _EmptyTask(void);
 #define TaskBlockProcess(_pid) m_TaskControl[_pid].taskStatus = TASK_BLOCKED
-extern void TaskBlockOthers(TaskIndiceType_t tid);
+extern void BROKEN_TaskBlockOthers(TaskIndiceType_t tid);
 #define TaskFreeProcess(_pid) m_TaskControl[_pid].taskStatus = TASK_READY
 extern void TaskFreeOthers(TaskIndiceType_t tid);
 extern void TaskSleep(TaskIndiceType_t taskIndex, TaskTimeout_t counts);
@@ -1003,6 +1025,8 @@ extern void TaskSetYield(TaskIndiceType_t taskIndex, TaskTimeout_t counts);
 #define TaskQuickSetYield(_pid) m_TaskControl[_pid].taskStatus = TASK_YIELD
 
 
+extern uint8_t YieldRequestDataCopy(TaskIndiceType_t id, void *memDestinationAddress, void *memSourceAddress, uint8_t bytes);
+extern uint8_t RequestDataCopy(void *memDestinationAddress, void *memSourceAddress, uint8_t bytes);
 
 //----------------------------------------------------------------------------------------------------
 
