@@ -9,16 +9,17 @@
 #include "PreemptiveTaskScheduler.h"
 
 ///An array block of our task control structures
-volatile TaskControl_t m_TaskControl[MAX_TASKS+1];
+static TaskControl_t m_TaskControl[MAX_TASKS+1];
 
 ///The index for our Task control block structure
-volatile TaskIndiceType_t m_TaskBlockIndex = 0;
+static TaskIndiceType_t m_TaskBlockIndex = 0;
 
 ///Count of the total items we've placed into the task control block
-volatile TaskIndiceType_t m_TaskBlockCount = 0;
+static TaskIndiceType_t m_TaskBlockCount = 0;
 
 ///The current task context
-volatile TaskContext_t *m_CurrentTaskContext;
+volatile TaskControl_t *m_CurrentTask;
+
 
 
 /**
@@ -26,7 +27,49 @@ volatile TaskContext_t *m_CurrentTaskContext;
 */
 const inline TaskIndiceType_t GetCurrentTask()
 {
-	return m_TaskControl[m_TaskBlockIndex].taskID;
+	//Return the id to our pointers current task id
+	return m_CurrentTask->taskID;
+}
+
+
+
+/**
+* \brief Gets the ID at the passed task index
+* \param index The index to fetch the ID at
+*/
+const TaskIndiceType_t _GetTaskID(TaskIndiceType_t index)
+{
+	//If our index is within range, return our id, else return out of range
+	return (index >= 0 && index <= MAX_TASKS) ? m_TaskControl[index].taskID : -1;	
+}
+
+
+
+/**
+* \brief Gets the FIRST index for the passed task ID
+* \param index The index to fetch the ID at
+*/
+TaskIndiceType_t _GetTaskIndex(TaskIndiceType_t id)
+{
+	//Create an index value, initialized to out of range
+	TaskIndiceType_t index = -1;
+	
+	//While we're within range of our tasks...
+	for(TaskIndiceType_t i = 0; i <= MAX_TASKS; i++)
+	{
+		//If we've found our ID...
+		if(m_TaskControl[i].taskID == id)
+		{
+			//Set our return value
+			index = i;
+			
+			//Break
+			break;
+		}
+	}
+	
+	return index;
+	
 }
 
 
@@ -38,6 +81,7 @@ const inline TaskIndiceType_t GetCurrentTask()
 */
 inline TaskStatus_t GetTaskStatus(TaskIndiceType_t id)
 {
+	//If our ID is within range, return our status, else return none
 	return (id >= 0 && id <= MAX_TASKS) ? m_TaskControl[id].taskStatus : TASK_NONE;	
 }
 
@@ -51,8 +95,15 @@ inline TaskStatus_t GetTaskStatus(TaskIndiceType_t id)
 */
 inline void SetTaskStatus(TaskIndiceType_t id, TaskStatus_t status)
 {
-	 m_TaskControl[id].taskStatus = status;
+	//If our ID is within range...
+	if(id >= 0 && id < MAX_TASKS)
+	{
+		//Set our status
+		m_TaskControl[id].taskStatus = status;	
+	}
+	 
 }
+
 
 
 /**
@@ -186,7 +237,7 @@ void AttachTask(void (*func)(void))
 void AttachTaskAt(void (*func)(void), TaskIndiceType_t index)
 {
 	//If we have the ability to add a new block...
-	if(index < MAX_TASKS)
+	if(index < MAX_TASKS && index >= 0)
 	{
 		
 		//Check for memory allowances
@@ -231,6 +282,106 @@ void AttachTaskAt(void (*func)(void), TaskIndiceType_t index)
 
 
 /**
+* \brief Immediately kills any task that has the passed id
+* \param index The index to find and kill
+* \ret 0 if not killed, the 1 if killed
+*/
+int8_t _KillTaskImmediate(TaskIndiceType_t index)
+{
+	//If our ID is out of range...
+	if(index < 0 || index > MAX_TASKS)
+	{
+		//Return 0
+		return 0;
+	}
+	
+	//Set initially to blocked so we don't call the task
+	m_TaskControl[index].taskStatus = TASK_BLOCKED;
+	
+	//Set the tasks stack address to 0
+	m_TaskControl[index]._taskStack = 0;
+		
+	//Loop through the tasks registers and...
+	for(TaskIndiceType_t i = 0; i < TASK_REGISTERS; i++)
+	{
+		//Clear
+		m_TaskControl[index].taskExecutionContext.registerFile[i] = 0;
+	}
+	
+	//Clear data
+	m_TaskControl[index].taskExecutionContext.pc.ptr = 0;
+	m_TaskControl[index].taskExecutionContext.sp.ptr = 0;
+	m_TaskControl[index].taskExecutionContext.sreg = 0;
+	m_TaskControl[index].taskData = 0;
+	m_TaskControl[index].task_func = 0;
+	
+	//Reset our timeout to its default
+	m_TaskControl[index].timeout = TASK_DEFAULT_TIMEOUT;
+	
+	//Set the id to out of range
+	m_TaskControl[index].taskID = -1;
+	
+	//Set the status as available
+	m_TaskControl[index].taskStatus = TASK_NONE;
+	
+	//Decrease our count
+	m_TaskBlockCount--;
+	
+	//Return successful
+	return 1;
+}
+
+
+
+/**
+* \brief Schedules a task to be killed
+* \param index The index of the tasks to kill
+* \ret 0 if not killed, 1 if killed
+*/
+int8_t KillTask(TaskIndiceType_t index)
+{
+	//If our index is out of range...
+	if(index < 0 || index > MAX_TASKS)
+	{
+		//Return 0
+		return 0;
+	}
+	
+	//Set the tasks status to kill
+	m_TaskControl[index].taskStatus = TASK_KILL;
+	
+	//Wait to be killed
+	while(m_TaskControl[index].taskStatus == TASK_KILL);
+	
+	//Return 1
+	return 1;
+}
+
+
+
+/**
+* \brief Returns the task control at the passed ID. Not super safe
+* \param index the index to get the task at
+*/
+TaskControl_t* _GetTaskControl(TaskIndiceType_t index)
+{
+	//If our index is within range...
+	if(index < MAX_TASKS && index >= 0 )
+	{
+		//Return the address for our task at index
+		return &m_TaskControl[index];
+	}
+	//else...
+	else
+	{
+		//return 0
+		return 0;
+	}
+}
+
+
+
+/**
 * \brief Sets all tasks to run and starts the schedulers interrupt service
 *
 */
@@ -268,6 +419,7 @@ void DispatchTasks()
 		m_TaskControl[MAX_TASKS].taskStatus = TASK_MAIN;
 		m_TaskControl[MAX_TASKS].taskID = MAX_TASKS;
 		m_TaskControl[MAX_TASKS]._taskStack = _TASK_STACK_START_ADDRESS(MAX_TASKS);
+		
 		//Set the function
 		m_TaskControl[MAX_TASKS].task_func = (void *)_EmptyTask;
 		
@@ -279,7 +431,7 @@ void DispatchTasks()
 		m_TaskControl[MAX_TASKS].taskExecutionContext.pc.ptr = (void *)_EmptyTask;
 		
 		//Set our current task to the last possible task, this way when entering for the first time we will loop to the first
-		m_CurrentTaskContext = &m_TaskControl[MAX_TASKS].taskExecutionContext;
+		m_CurrentTask = &m_TaskControl[MAX_TASKS];
 		
 		//Launch the ISR
 		_SCHEDULER_LAUNCH_ISR();
@@ -366,6 +518,13 @@ void TaskFreeOthers(TaskIndiceType_t tid)
 */
 void TaskSleep(TaskIndiceType_t taskIndex, TaskTimeout_t counts)
 {
+	//If our index is out of range...
+	if (taskIndex < 0 || taskIndex > MAX_TASKS)
+	{
+		//return
+		return;
+	}
+	
 	//Disable interrupts
 	asm volatile("cli":::"memory");
 	
@@ -375,6 +534,7 @@ void TaskSleep(TaskIndiceType_t taskIndex, TaskTimeout_t counts)
 	//Re-enable interrupts
 	asm volatile("sei":::"memory");
 	
+	//While timed out, count down
 	while(m_TaskControl[taskIndex].timeout > 0)
 	{
 		m_TaskControl[taskIndex].taskStatus = TASK_SLEEP;
@@ -395,7 +555,17 @@ void TaskYield(TaskTimeout_t counts)
 	asm volatile("cli":::"memory");
 	
 	//Save our current index
-	volatile TaskIndiceType_t taskIndex = m_TaskBlockIndex;
+	volatile TaskIndiceType_t taskIndex = _GetTaskIndex(m_CurrentTask->taskID);
+	
+	//If our task is out of range...
+	if (taskIndex < 0 || taskIndex > MAX_TASKS)
+	{
+		//Re-enable interrupts
+		asm volatile("sei":::"memory");
+		
+		//return
+		return;
+	}
 	
 	//Set our status
 	m_TaskControl[taskIndex].taskStatus = TASK_YIELD;
@@ -418,6 +588,13 @@ void TaskYield(TaskTimeout_t counts)
 */
 void TaskSetYield(TaskIndiceType_t taskIndex, TaskTimeout_t counts)
 {
+	//If our task is out of range...
+	if (taskIndex < 0 || taskIndex > MAX_TASKS)
+	{
+		//return
+		return;
+	}
+	
 	//Disable interrupts
 	asm volatile("cli":::"memory");
 	
@@ -442,8 +619,41 @@ void TaskSetYield(TaskIndiceType_t taskIndex, TaskTimeout_t counts)
 */
 __attribute__ ((weak)) void _TaskSwitch(void) 
 {
-	//If our new process is not set to blocked...
-	if(m_TaskControl[m_TaskBlockIndex].taskStatus != TASK_BLOCKED && m_TaskControl[m_TaskBlockIndex].taskStatus != TASK_NONE)
+	
+	//Get our current task block index
+	m_TaskBlockIndex = _GetTaskIndex(m_CurrentTask->taskID);
+	
+	//If our task index is out of range somehow...
+	if(m_TaskBlockIndex < 0 || m_TaskBlockIndex > MAX_TASKS)
+	{
+		//Return
+		return;
+	}
+	
+	//If our task is scheduled to be killed...
+	if(m_TaskControl[m_TaskBlockIndex].taskStatus == TASK_KILL)
+	{
+		m_TaskBlockCount--;
+		
+		m_TaskControl[m_TaskBlockIndex]._taskStack = 0;
+		
+		for(TaskIndiceType_t i = 0; i < TASK_REGISTERS; i++)
+		{
+			m_TaskControl[m_TaskBlockIndex].taskExecutionContext.registerFile[i] = 0;
+		}
+	
+		m_TaskControl[m_TaskBlockIndex].taskExecutionContext.pc.ptr = 0;
+		m_TaskControl[m_TaskBlockIndex].taskExecutionContext.sp.ptr = 0;
+		m_TaskControl[m_TaskBlockIndex].taskExecutionContext.sreg = 0;
+		m_TaskControl[m_TaskBlockIndex].taskData = 0;
+		m_TaskControl[m_TaskBlockIndex].task_func = 0;
+		m_TaskControl[m_TaskBlockIndex].timeout = TASK_DEFAULT_TIMEOUT;
+		m_TaskControl[m_TaskBlockIndex].taskID = -1;
+		m_TaskControl[m_TaskBlockIndex].taskStatus = TASK_NONE;
+		
+	}
+	//else If our new process is not set to blocked...
+	else if(m_TaskControl[m_TaskBlockIndex].taskStatus != TASK_BLOCKED && m_TaskControl[m_TaskBlockIndex].taskStatus != TASK_NONE)
 	{
 		//If our task is set to YIELD...
 		if(m_TaskControl[m_TaskBlockIndex].taskStatus == TASK_YIELD)
@@ -467,39 +677,56 @@ __attribute__ ((weak)) void _TaskSwitch(void)
 		}
 	}
 	
-	//Increment our block index
-	m_TaskBlockIndex++;
+	//Safety counter
+	volatile int8_t safety = 100;
+	
+	do
+	{
+		//Increment our block index
+		m_TaskBlockIndex++;
+		
+		//Range check our block index
+		if(m_TaskBlockIndex > MAX_TASKS)
+		{
+			m_TaskBlockIndex = 0;
+		}
+		
+		//If our safety is bad...
+		if(--safety <= 0)
+		{
+			//break
+			break;
+		}
+		
+	}while(m_TaskControl[m_TaskBlockIndex].taskStatus == TASK_BLOCKED || m_TaskControl[m_TaskBlockIndex].taskStatus == TASK_NONE || m_TaskControl[m_TaskBlockIndex].taskStatus == TASK_KILL);
+	
 
-	
-	//Range check our block index
-	if(m_TaskBlockIndex >= m_TaskBlockCount || m_TaskBlockIndex >= MAX_TASKS)
+
+	//If our new process is not set to a blocked status...
+	if(m_TaskControl[m_TaskBlockIndex].taskStatus != TASK_BLOCKED && m_TaskControl[m_TaskBlockIndex].taskStatus != TASK_NONE && m_TaskControl[m_TaskBlockIndex].taskStatus != TASK_KILL)
 	{
-		m_TaskBlockIndex = 0;
-	}
-	
-	//If our new process is not set to blocked...
-	if(m_TaskControl[m_TaskBlockIndex].taskStatus != TASK_BLOCKED && m_TaskControl[m_TaskBlockIndex].taskStatus != TASK_NONE)
-	{
+		//if our task is set to be scheduled...
 		if(m_TaskControl[m_TaskBlockIndex].taskStatus == TASK_SCHEDULED)
 		{
+			//Set as ready
 			m_TaskControl[m_TaskBlockIndex].taskStatus = TASK_READY;
 			
+			//Go to our empty task
 			m_TaskBlockIndex = MAX_TASKS;
-			m_CurrentTaskContext = &m_TaskControl[MAX_TASKS].taskExecutionContext;
+			m_CurrentTask = &m_TaskControl[MAX_TASKS];
 		}
 		else
 		{
 			//Set our current task context to the new execution context
-			m_CurrentTaskContext = &m_TaskControl[m_TaskBlockIndex].taskExecutionContext;
+			m_CurrentTask =  &m_TaskControl[m_TaskBlockIndex];
 		}
-		
-		
-		
 	}
+	//else...
 	else
 	{
+		//Go to our empty task
 		m_TaskBlockIndex = MAX_TASKS;
-		m_CurrentTaskContext = &m_TaskControl[MAX_TASKS].taskExecutionContext;
+		m_CurrentTask = &m_TaskControl[MAX_TASKS];
 	}
 	
 }
@@ -516,13 +743,13 @@ ISR(SCHEDULER_INT_VECTOR, ISR_NAKED)
 	__asm__ __volatile__("cli \n\t":::"memory");
 	
 	//Save our tasks context
-	ASM_SAVE_GLOBAL_PTR_CONTEXT(m_CurrentTaskContext);
+	ASM_SAVE_GLOBAL_PTR_CONTEXT(m_CurrentTask);
 	
 	//Handle task switching
 	_TaskSwitch();
 	
 	//Restore our next context
-	ASM_RESTORE_GLOBAL_PTR_CONTEXT(m_CurrentTaskContext);
+	ASM_RESTORE_GLOBAL_PTR_CONTEXT(m_CurrentTask);
 	
 	//Make sure isr is reset before exiting...
 	_SCHEDULER_LOAD_ISR_REG();

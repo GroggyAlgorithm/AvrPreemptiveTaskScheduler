@@ -135,7 +135,7 @@ __asm__(".equ CONTEXT_OFFSET_R26,  9 \n\t");
 typedef int8_t SemaphoreValueType_t;
 
 ///Data type for task indices (changeable if looking for higher values)
-typedef uint8_t TaskIndiceType_t;
+typedef int8_t TaskIndiceType_t;
 
 ///Data type for the register size for our tasks
 typedef uint8_t TaskRegisterType_t;
@@ -152,14 +152,16 @@ typedef uint16_t TaskTimeout_t;
 
 typedef enum TaskStatus_t
 {
-	TASK_READY,
-	TASK_SEMAPHORE,
-	TASK_BLOCKED,
-	TASK_SLEEP,
-	TASK_YIELD,
-	TASK_MAIN, //Special reserved status for 'main' tasks
-	TASK_SCHEDULED,
-	TASK_NONE
+	TASK_NONE = -1,
+	TASK_READY = 0,
+	TASK_SEMAPHORE = 1,
+	TASK_BLOCKED = 2,
+	TASK_SLEEP = 3,
+	TASK_YIELD = 4,
+	TASK_MAIN = 5, //Special reserved status for 'main' tasks
+	TASK_SCHEDULED = 6,
+	TASK_KILL = 7
+	
 }
 /**
 *
@@ -220,12 +222,13 @@ TaskContext_t;
 
 typedef struct TaskControl_t
 {
-	//The status of our task
-	TaskStatus_t taskStatus;
-
+	
 	//Context for execution
 	TaskContext_t taskExecutionContext;
 	
+	//The status of our task
+	TaskStatus_t taskStatus;
+
 	//Our tasks data
 	void* taskData;
 
@@ -244,6 +247,9 @@ typedef struct TaskControl_t
 	//For handling data request
 	
 	//For handling data request responses
+	
+	//The next task control
+	//struct TaskControl_t *next;
 	
 } 
 
@@ -968,12 +974,22 @@ __attribute__((naked)) static void RestoreContext(volatile TaskContext_t *taskCo
 
 
 extern __attribute__ ((weak)) void _TaskSwitch(void);
+
 extern const TaskIndiceType_t GetCurrentTask();
+extern const TaskIndiceType_t _GetTaskID(TaskIndiceType_t index);
+extern TaskIndiceType_t _GetTaskIndex(TaskIndiceType_t id);
 extern TaskStatus_t GetTaskStatus(TaskIndiceType_t id);
 extern void SetTaskStatus(TaskIndiceType_t id, TaskStatus_t status);
+
 extern void AttachIDTask(void (*func)(TaskIndiceType_t));
 extern void AttachTask(void (*func)(void ));
 extern void AttachTaskAt(void (*func)(void), TaskIndiceType_t index);
+
+
+extern int8_t _KillTaskImmediate(TaskIndiceType_t index);
+extern int8_t KillTask(TaskIndiceType_t index);
+extern TaskControl_t* _GetTaskControl(TaskIndiceType_t index);
+
 
 extern void DispatchTasks();
 extern void _EmptyTask(void);
@@ -986,6 +1002,8 @@ extern void TaskYield(TaskTimeout_t counts);
 extern void TaskSetYield(TaskIndiceType_t taskIndex, TaskTimeout_t counts);
 #define TaskQuickSetYield(_pid) m_TaskControl[_pid].taskStatus = TASK_YIELD
 
+
+
 //----------------------------------------------------------------------------------------------------
 
 
@@ -994,20 +1012,26 @@ extern void TaskSetYield(TaskIndiceType_t taskIndex, TaskTimeout_t counts);
 /**
 * \brief Adds and launches a task to the available tasks while running
 * \param func The function for running the task
+* \param Returns the id for the scheduled task
 */
-static void ScheduleTask(void (*func)(void))
+static TaskIndiceType_t ScheduleTask(void (*func)(void))
 {
-	TaskIndiceType_t nid = 0;
+	TaskIndiceType_t nid = -1;
+	volatile TaskStatus_t taskStatus = TASK_BLOCKED;
 	
 	for(nid = 0; nid < MAX_TASKS; nid++)
 	{
-		if(GetTaskStatus(nid) == TASK_NONE)
+		taskStatus = GetTaskStatus(nid);
+		
+		if(taskStatus == TASK_NONE)
 		{
 			AttachTaskAt(func, nid);
 			SetTaskStatus(nid, TASK_SCHEDULED);
 			break;
 		}
 	}
+	
+	return nid;
 }
 
 
