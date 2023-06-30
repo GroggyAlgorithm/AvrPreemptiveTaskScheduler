@@ -6,6 +6,8 @@
 #include <avr/io.h>
 #include <avr/interrupt.h>
 
+#include <stdbool.h>
+
 #include "PreemptiveTaskScheduler.h"
 
 ///An array block of our task control structures
@@ -23,6 +25,18 @@ volatile TaskControl_t *m_CurrentTask;
 ///Semaphore value for accessing memory, registers, ex. adc, etc.
 static SemaphoreValueType_t m_semMemoryAccessor;
 
+///If the tasks have started running
+static bool m_blnTasksRunning = false;
+
+
+/**
+* \brief Returns the state of if the tasks are set as running
+* \ret bool true if running, false if not running
+*/
+const inline bool AreTaskRunning()
+{
+	return m_blnTasksRunning;
+}
 
 
 
@@ -91,7 +105,6 @@ inline TaskStatus_t GetTaskStatus(TaskIndiceType_t id)
 
 
 
-
 /**
 * \brief Sets the status of the specified task
 * \param index The task id to set at
@@ -117,7 +130,7 @@ inline void SetTaskStatus(TaskIndiceType_t id, TaskStatus_t status)
 void AttachIDTask(void (*func)(TaskIndiceType_t))
 {
 	//If we have the ability to add a new block...
-	if(m_TaskBlockIndex < MAX_TASKS)
+	if(m_TaskBlockIndex < MAX_TASKS && m_TaskBlockIndex >= 0)
 	{
 		//Check for memory allowances
 		if((uint16_t)_TASK_STACK_START_ADDRESS(m_TaskBlockIndex) < RAMSTART)
@@ -135,8 +148,8 @@ void AttachIDTask(void (*func)(TaskIndiceType_t))
 		//Set the function
 		m_TaskControl[m_TaskBlockIndex].task_func = (void *)func;
 		
-		//Default to blocked until tasks are dispatched
-		m_TaskControl[m_TaskBlockIndex].taskStatus = TASK_BLOCKED;
+		//Default to scheduled
+		m_TaskControl[m_TaskBlockIndex].taskStatus = TASK_SCHEDULED;
 		
 		//Set our default timeout
 		m_TaskControl[m_TaskBlockIndex].timeout = TASK_DEFAULT_TIMEOUT;
@@ -183,13 +196,19 @@ void AttachIDTask(void (*func)(TaskIndiceType_t))
 
 
 /**
-* \brief Attaches a task to the available tasks
+* \brief Safely attaches a task to the available tasks
 * \param func The function for running the task
 */
 void AttachTask(void (*func)(void))
 {
-	//If we have the ability to add a new block...
-	if(m_TaskBlockIndex < MAX_TASKS)
+	//If our tasks have started running...
+	if(m_blnTasksRunning == true)
+	{
+		//Schedule the task instead
+		ScheduleTask(func);	
+	}
+	//else, If we have the ability to add a new block...
+	else if(m_TaskBlockIndex < MAX_TASKS && m_TaskBlockIndex >= 0)
 	{
 
 		//Check for memory allowances
@@ -197,6 +216,15 @@ void AttachTask(void (*func)(void))
 		{
 			//Out of memory ):
 			return;	
+		}
+		
+		//Check if the current task is open to attaching
+		if(m_TaskControl[m_TaskBlockIndex].taskStatus != TASK_NONE)
+		{
+			
+			//Not a good spot to attach ):
+			return;
+			
 		}
 		
 		//Set the memory location for our task stack
@@ -208,8 +236,8 @@ void AttachTask(void (*func)(void))
 		//Set the function
 		m_TaskControl[m_TaskBlockIndex].task_func = (void *)func;
 		
-		//Default to blocked until tasks are dispatched
-		m_TaskControl[m_TaskBlockIndex].taskStatus = TASK_BLOCKED;
+		//Default to scheduled
+		m_TaskControl[m_TaskBlockIndex].taskStatus = TASK_SCHEDULED;
 		
 		//Set our default timeout
 		m_TaskControl[m_TaskBlockIndex].timeout = TASK_DEFAULT_TIMEOUT;
@@ -260,8 +288,8 @@ void AttachTaskAt(void (*func)(void), TaskIndiceType_t index)
 		//Set the function
 		m_TaskControl[index].task_func = (void *)func;
 		
-		//Default to blocked until tasks are dispatched
-		m_TaskControl[index].taskStatus = TASK_BLOCKED;
+		//Default to scheduled
+		m_TaskControl[index].taskStatus = TASK_SCHEDULED;
 		
 		//Set our default timeout
 		m_TaskControl[index].timeout = TASK_DEFAULT_TIMEOUT;
@@ -286,6 +314,117 @@ void AttachTaskAt(void (*func)(void), TaskIndiceType_t index)
 
 
 /**
+* \brief Some what safely attaches anything, but what should be a function. Can be dangerous if not used properly.
+* \param taskPtr the address of what should be a function
+*/
+void AttachTaskPointer(void *taskPtr)
+{
+	
+	//If our tasks have started running...
+	if(m_blnTasksRunning == true)
+	{
+		//Schedule the task instead
+		ScheduleTaskPointer(taskPtr);	
+	}
+	//else, If we have the ability to add a new block...
+	else if(m_TaskBlockIndex <= MAX_TASKS && m_TaskBlockIndex >= 0)
+	{
+		
+		//Check for memory allowances
+		if((uint16_t)_TASK_STACK_START_ADDRESS(m_TaskBlockIndex) < RAMSTART)
+		{
+			//Out of memory ):
+			return;	
+		}
+		
+		//Check if the current task is open to attaching
+		if(m_TaskControl[m_TaskBlockIndex].taskStatus != TASK_NONE)
+		{
+			//Not a good spot to attach ):
+			return;
+		}
+		
+		//Set the memory location for our task stack
+		m_TaskControl[m_TaskBlockIndex]._taskStack = _TASK_STACK_START_ADDRESS(m_TaskBlockIndex);
+		
+		//Set the task ID
+		m_TaskControl[m_TaskBlockIndex].taskID = m_TaskBlockIndex;
+		
+		//Set the function
+		m_TaskControl[m_TaskBlockIndex].task_func = taskPtr;
+		
+		//Default to scheduled
+		m_TaskControl[m_TaskBlockIndex].taskStatus = TASK_SCHEDULED;
+		
+		//Set our default timeout
+		m_TaskControl[m_TaskBlockIndex].timeout = TASK_DEFAULT_TIMEOUT;
+		
+		//initialize stack pointer and program counter for our program execution
+		m_TaskControl[m_TaskBlockIndex].taskExecutionContext.sp.ptr = ((uint8_t *)m_TaskControl[m_TaskBlockIndex]._taskStack);
+		m_TaskControl[m_TaskBlockIndex].taskExecutionContext.pc.ptr = taskPtr;
+
+		//Increment our m_TaskBlockIndex
+		m_TaskBlockIndex++;
+		
+		//Set our count to be equal to the m_TaskBlockIndex
+		m_TaskBlockCount = m_TaskBlockIndex;
+		
+		
+	}
+}
+
+
+
+/**
+* \brief Attaches anything, but what should be a function, at the index passed. Can be dangerous if not used properly.
+* \param taskPtr the address of what should be a function
+* \param index The index to attach at
+*/
+void AttachTaskPointerAt(void *taskPtr, TaskIndiceType_t index)
+{
+	//If we have the ability to add a new block...
+	if(index <= MAX_TASKS && index >= 0)
+	{
+		
+		//Check for memory allowances
+		if((uint16_t)_TASK_STACK_START_ADDRESS(index) < RAMSTART)
+		{
+			//Out of memory ):
+			return;	
+		}
+		
+		//Set the memory location for our task stack
+		m_TaskControl[index]._taskStack = _TASK_STACK_START_ADDRESS(index);
+		
+		//Set the task ID
+		m_TaskControl[index].taskID = index;
+		
+		//Set the function
+		m_TaskControl[index].task_func = taskPtr;
+		
+		//Default to scheduled
+		m_TaskControl[index].taskStatus = TASK_SCHEDULED;
+		
+		//Set our default timeout
+		m_TaskControl[index].timeout = TASK_DEFAULT_TIMEOUT;
+		
+		//initialize stack pointer and program counter for our program execution
+		m_TaskControl[index].taskExecutionContext.sp.ptr = ((uint8_t *)m_TaskControl[index]._taskStack);
+		m_TaskControl[index].taskExecutionContext.pc.ptr = taskPtr;
+
+		//Increment our index
+		index++;
+		
+		//Set our count to be equal to the index
+		m_TaskBlockCount = index;
+		
+		
+	}
+}
+
+
+
+/**
 * \brief Immediately kills any task that has the passed id
 * \param index The index to find and kill
 * \ret 0 if not killed, the 1 if killed
@@ -293,7 +432,7 @@ void AttachTaskAt(void (*func)(void), TaskIndiceType_t index)
 int8_t _KillTaskImmediate(TaskIndiceType_t index)
 {
 	//If our ID is out of range...
-	if(index < 0 || index > MAX_TASKS)
+	if(index < 0 || index >= MAX_TASKS)
 	{
 		//Return 0
 		return 0;
@@ -364,6 +503,73 @@ int8_t KillTask(TaskIndiceType_t index)
 
 
 /**
+* \brief Sets all tasks to be killed
+*
+*/
+int8_t KillAllTasks()
+{
+	//Loop through all tasks and...
+	for(TaskIndiceType_t i = 0; i <= MAX_TASKS; i++)
+	{
+		//Set the tasks status to kill
+		m_TaskControl[i].taskStatus = TASK_KILL;
+	}
+	
+	//Return 1
+	return 1;
+}
+
+
+
+/**
+* \brief Immediately kills all tasks
+*
+*/
+int8_t _KillAllTasksImmediate()
+{
+	//Loop through all tasks and...
+	for(TaskIndiceType_t index = 0; index <= MAX_TASKS; index++)
+	{
+		//Set initially to blocked so we don't call the task
+		m_TaskControl[index].taskStatus = TASK_BLOCKED;
+	
+		//Set the tasks stack address to 0
+		m_TaskControl[index]._taskStack = 0;
+		
+		//Loop through the tasks registers and...
+		for(TaskIndiceType_t i = 0; i < TASK_REGISTERS; i++)
+		{
+			//Clear
+			m_TaskControl[index].taskExecutionContext.registerFile[i] = 0;
+		}
+	
+		//Clear data
+		m_TaskControl[index].taskExecutionContext.pc.ptr = 0;
+		m_TaskControl[index].taskExecutionContext.sp.ptr = 0;
+		m_TaskControl[index].taskExecutionContext.sreg = 0;
+		m_TaskControl[index].taskData = 0;
+		m_TaskControl[index].task_func = 0;
+	
+		//Reset our timeout to its default
+		m_TaskControl[index].timeout = TASK_DEFAULT_TIMEOUT;
+	
+		//Set the id to out of range
+		m_TaskControl[index].taskID = -1;
+	
+		//Set the status as available
+		m_TaskControl[index].taskStatus = TASK_NONE;
+	
+		//Decrease our count
+		m_TaskBlockCount--;
+	}
+	
+	//Return 1
+	return 1;
+}
+
+
+
+/**
 * \brief Returns the task control at the passed ID. Not super safe
 * \param index the index to get the task at
 */
@@ -386,7 +592,7 @@ TaskControl_t* _GetTaskControl(TaskIndiceType_t index)
 
 
 /**
-* \brief Sets all tasks to run and starts the schedulers interrupt service
+* \brief Sets all tasks to run, starts the schedulers interrupt service, and waits until all tasks are completed.
 *
 */
 void DispatchTasks()
@@ -403,8 +609,8 @@ void DispatchTasks()
 		//For each task...
 		for(TaskIndiceType_t i = 0; i < MAX_TASKS; i++)
 		{
-			//If we're within range for our count to set to ready...
-			if(i < m_TaskBlockCount)
+			//If we're within range for our count to set to ready and we meet all settings...
+			if(i < m_TaskBlockCount && m_TaskControl[i].taskStatus != TASK_NONE)
 			{
 				//Set to ready
 				m_TaskControl[i].taskStatus = TASK_READY;
@@ -437,11 +643,21 @@ void DispatchTasks()
 		//Set our current task to the last possible task, this way when entering for the first time we will loop to the first
 		m_CurrentTask = &m_TaskControl[MAX_TASKS];
 		
+		//Set our tasks running to true
+		m_blnTasksRunning = true;
+		
 		//Launch the ISR
 		_SCHEDULER_LAUNCH_ISR();
 		
 		//Re enable interrupts
 		__asm__ __volatile__("sei \n\t":::"memory");
+		
+		//wait while our tasks are running
+		while(m_blnTasksRunning == true);
+		
+		//Make sure our task index is reset back to 0 to allow us to more effectively 
+		//launch tasks in the future. Covers some edge cases
+		m_TaskBlockCount = 0;
 	}
 
 }
@@ -466,8 +682,8 @@ void StartTasks(void (*mainfunc)(void))
 		//For each task...
 		for(TaskIndiceType_t i = 0; i < MAX_TASKS; i++)
 		{
-			//If we're within range for our count to set to ready...
-			if(i < m_TaskBlockCount)
+			//If we're within range for our count to set to ready and we meet all settings...
+			if(i < m_TaskBlockCount && m_TaskControl[i].taskStatus != TASK_NONE)
 			{
 				//Set to ready
 				m_TaskControl[i].taskStatus = TASK_READY;
@@ -500,11 +716,22 @@ void StartTasks(void (*mainfunc)(void))
 		//Set our current task to the last possible task, this way when entering for the first time we will loop to the first
 		m_CurrentTask = &m_TaskControl[MAX_TASKS];
 		
+		//Set our tasks running to true
+		m_blnTasksRunning = true;
+		
 		//Launch the ISR
 		_SCHEDULER_LAUNCH_ISR();
 		
 		//Re enable interrupts
 		__asm__ __volatile__("sei \n\t":::"memory");
+		
+		
+		//wait while our tasks are running
+		while(m_blnTasksRunning == true);
+		
+		//Make sure our task index is reset back to 0 to allow us to more effectively 
+		//launch tasks in the future. Covers some edge cases
+		m_TaskBlockCount = 0;
 	}
 
 }
@@ -512,15 +739,23 @@ void StartTasks(void (*mainfunc)(void))
 
 
 /**
-* \brief empty task
+* \brief An empty task, also a good example for how to enter and exit a task appropriately.
 *
 */
 void _EmptyTask(void)
 {
+	//The current tasks ID
+	TaskIndiceType_t tid = GetCurrentTask();
+	
+	//Task loop
 	while (1)
 	{
 		
 	}
+	
+	
+	//Appropriate way to exit a task
+	while(!KillTask(tid));
 }
 
 
@@ -564,7 +799,7 @@ void BROKEN_TaskBlockOthers(TaskIndiceType_t tid)
 * \brief Frees all other tasks
 *
 */
-void TaskFreeOthers(TaskIndiceType_t tid)
+void BROKEN_TaskFreeOthers(TaskIndiceType_t tid)
 {
 	//Disable interrupts
 	asm volatile("cli":::"memory");
@@ -588,7 +823,8 @@ void TaskFreeOthers(TaskIndiceType_t tid)
 
 /**
 * \brief Sets this task to sleep for the specified amount of counts, counting down here locally
-*
+* \param taskindex The index of the task, which if ran correctly should be the tasks ID
+* \param counts The amount of counts to wait for
 */
 void TaskSleep(TaskIndiceType_t taskIndex, TaskTimeout_t counts)
 {
@@ -604,6 +840,9 @@ void TaskSleep(TaskIndiceType_t taskIndex, TaskTimeout_t counts)
 	
 	//Save our timeout counts
 	m_TaskControl[taskIndex].timeout = counts;
+	
+	//Make sure we're set to sleep
+	m_TaskControl[taskIndex].taskStatus = TASK_SLEEP;
 	
 	//Re-enable interrupts
 	asm volatile("sei":::"memory");
@@ -621,7 +860,7 @@ void TaskSleep(TaskIndiceType_t taskIndex, TaskTimeout_t counts)
 
 /**
 * \brief Sets this task to yield for the specified amount of counts, counting down in the scheduler interrupt
-*
+* \param counts The amount of counts to wait for
 */
 void TaskYield(TaskTimeout_t counts)
 {
@@ -658,7 +897,8 @@ void TaskYield(TaskTimeout_t counts)
 
 /**
 * \brief Sets this task to yield for the specified amount of counts, counting down in the scheduler interrupt
-* \param taskIndex The index of the task to sleep
+* \param taskIndex The index of the task to sleep, which if ran correctly should be the tasks ID
+* \param counts The amount of counts to wait for
 */
 void TaskSetYield(TaskIndiceType_t taskIndex, TaskTimeout_t counts)
 {
@@ -854,25 +1094,58 @@ __attribute__ ((weak)) void _TaskSwitch(void)
 	//Safety counter
 	volatile int8_t safety = 100;
 	
+	//do this...
 	do
 	{
 		//Increment our block index
 		m_TaskBlockIndex++;
 		
-		//Range check our block index
-		if(m_TaskBlockIndex > MAX_TASKS)
+		//If our main task is set to the EMPTY function...
+		if((TaskMemoryLocationType_t)m_TaskControl[MAX_TASKS].task_func == (TaskMemoryLocationType_t)_EmptyTask)
 		{
-			m_TaskBlockIndex = 0;
+			//Range check our block index
+			if(m_TaskBlockIndex >= MAX_TASKS)
+			{
+				m_TaskBlockIndex = 0;
+			}
+		}
+		//else...
+		else
+		{
+			//Range check our block index
+			if(m_TaskBlockIndex > MAX_TASKS)
+			{
+				m_TaskBlockIndex = 0;
+			}
 		}
 		
-		//If our safety is bad...
+		
+		//If our safety is bad, meaning we have reached some form of catastrophic failure ): or all tasks have been killed ...
 		if(--safety <= 0)
 		{
-			//break
+			//Set our tasks running to false
+			m_blnTasksRunning = false;
+			
+			//Make sure all tasks are dead
+			for(TaskIndiceType_t i = 0; i <= MAX_TASKS; i++)
+			{
+				//Kill that damn task
+				_KillTaskImmediate(i);
+			}
+			
+			//Make sure our task counts are set to 0, allowing us to be able to launch tasks later
+			m_TaskBlockCount = 0;
+			
+			//Make sure our schedulers ticking is stopped
+			_SCHEDULER_STOP_TICK();
+			
+			//Break and return to wherever it is we go when tasks die.
 			break;
 		}
 		
-	}while(m_TaskControl[m_TaskBlockIndex].taskStatus == TASK_BLOCKED || m_TaskControl[m_TaskBlockIndex].taskStatus == TASK_NONE || m_TaskControl[m_TaskBlockIndex].taskStatus == TASK_KILL);
+	}
+	//While our tasks are either blocked, set to none, or are set to be killed
+	while(m_TaskControl[m_TaskBlockIndex].taskStatus == TASK_BLOCKED || m_TaskControl[m_TaskBlockIndex].taskStatus == TASK_NONE || m_TaskControl[m_TaskBlockIndex].taskStatus == TASK_KILL);
 	
 
 
@@ -885,7 +1158,7 @@ __attribute__ ((weak)) void _TaskSwitch(void)
 			//Set as ready
 			m_TaskControl[m_TaskBlockIndex].taskStatus = TASK_READY;
 			
-			//Go to our empty task
+			//Go to our reserved task
 			m_TaskBlockIndex = MAX_TASKS;
 			m_CurrentTask = &m_TaskControl[MAX_TASKS];
 		}
@@ -898,7 +1171,7 @@ __attribute__ ((weak)) void _TaskSwitch(void)
 	//else...
 	else
 	{
-		//Go to our empty task
+		//Go to our reserved task
 		m_TaskBlockIndex = MAX_TASKS;
 		m_CurrentTask = &m_TaskControl[MAX_TASKS];
 	}

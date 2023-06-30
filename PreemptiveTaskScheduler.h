@@ -168,15 +168,15 @@ typedef uint16_t TaskTimeout_t;
 
 typedef enum TaskStatus_t
 {
-	TASK_NONE = -1,
-	TASK_READY = 0,
-	TASK_SEMAPHORE = 1,
-	TASK_BLOCKED = 2,
-	TASK_SLEEP = 3,
-	TASK_YIELD = 4,
-	TASK_MAIN = 5, //Special reserved status for 'main' tasks
-	TASK_SCHEDULED = 6,
-	TASK_KILL = 7
+	TASK_NONE = 0,//-1,
+	TASK_READY = 1,
+	TASK_SEMAPHORE = 2,
+	TASK_BLOCKED = 3,
+	TASK_SLEEP = 4,
+	TASK_YIELD = 5,
+	TASK_MAIN = 6, //Special reserved status for 'main' tasks
+	TASK_SCHEDULED = 7,
+	TASK_KILL = 8
 	
 }
 /**
@@ -996,6 +996,7 @@ __attribute__((naked)) static void RestoreContext(volatile TaskContext_t *taskCo
 
 extern __attribute__ ((weak)) void _TaskSwitch(void);
 
+extern const bool AreTaskRunning();
 extern const TaskIndiceType_t GetCurrentTask();
 extern const TaskIndiceType_t _GetTaskID(TaskIndiceType_t index);
 extern TaskIndiceType_t _GetTaskIndex(TaskIndiceType_t id);
@@ -1005,28 +1006,32 @@ extern void SetTaskStatus(TaskIndiceType_t id, TaskStatus_t status);
 extern void AttachIDTask(void (*func)(TaskIndiceType_t));
 extern void AttachTask(void (*func)(void ));
 extern void AttachTaskAt(void (*func)(void), TaskIndiceType_t index);
-
+extern void AttachTaskPointer(void *taskPtr);
+extern void AttachTaskPointerAt(void *taskPtr, TaskIndiceType_t index);
 
 extern int8_t _KillTaskImmediate(TaskIndiceType_t index);
 extern int8_t KillTask(TaskIndiceType_t index);
+extern int8_t KillAllTasks();
+extern int8_t _KillAllTasksImmediate();
 extern TaskControl_t* _GetTaskControl(TaskIndiceType_t index);
-
-
 extern void DispatchTasks();
 extern void StartTasks(void (*mainfunc)(void));
 extern void _EmptyTask(void);
-#define TaskBlockProcess(_pid) m_TaskControl[_pid].taskStatus = TASK_BLOCKED
+
+
 extern void BROKEN_TaskBlockOthers(TaskIndiceType_t tid);
-#define TaskFreeProcess(_pid) m_TaskControl[_pid].taskStatus = TASK_READY
-extern void TaskFreeOthers(TaskIndiceType_t tid);
+extern void BROKEN_TaskFreeOthers(TaskIndiceType_t tid);
+
+
 extern void TaskSleep(TaskIndiceType_t taskIndex, TaskTimeout_t counts);
 extern void TaskYield(TaskTimeout_t counts);
 extern void TaskSetYield(TaskIndiceType_t taskIndex, TaskTimeout_t counts);
-#define TaskQuickSetYield(_pid) m_TaskControl[_pid].taskStatus = TASK_YIELD
 
 
 extern uint8_t YieldRequestDataCopy(TaskIndiceType_t id, void *memDestinationAddress, void *memSourceAddress, uint8_t bytes);
 extern uint8_t RequestDataCopy(void *memDestinationAddress, void *memSourceAddress, uint8_t bytes);
+
+
 
 //----------------------------------------------------------------------------------------------------
 
@@ -1034,7 +1039,34 @@ extern uint8_t RequestDataCopy(void *memDestinationAddress, void *memSourceAddre
 
 
 /**
-* \brief Adds and launches a task to the available tasks while running
+* \brief Schedules anything, but what should be a function, at the index passed. Can be dangerous if not used properly.
+* \param taskPtr the address of what should be a function
+* \param Returns the id for the scheduled task
+*/
+static TaskIndiceType_t ScheduleTaskPointer(void *taskPtr)
+{
+	TaskIndiceType_t nid = -1;
+	volatile TaskStatus_t taskStatus = TASK_BLOCKED;
+	
+	for(nid = 0; nid < MAX_TASKS; nid++)
+	{
+		taskStatus = GetTaskStatus(nid);
+		
+		if(taskStatus == TASK_NONE)
+		{
+			AttachTaskPointerAt(taskPtr, nid);
+			SetTaskStatus(nid, TASK_SCHEDULED);
+			break;
+		}
+	}
+	
+	return nid;
+}
+
+
+
+/**
+* \brief Adds and schedules a task to the available tasks for it to be ran when able
 * \param func The function for running the task
 * \param Returns the id for the scheduled task
 */
@@ -1057,7 +1089,6 @@ static TaskIndiceType_t ScheduleTask(void (*func)(void))
 	
 	return nid;
 }
-
 
 
 
