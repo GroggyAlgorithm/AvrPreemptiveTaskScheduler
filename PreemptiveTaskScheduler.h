@@ -58,43 +58,73 @@ extern "C" {
 #endif
 
 #if SCHEDULER_INT_VECTOR == TIMER3_OVF_vect
-	
+	#ifndef _SCHEDULER_STOP_TICK
 	#define _SCHEDULER_STOP_TICK()		TCCR3B &= ~(1 << CS30 | 1 << CS31 | 1 << CS32)
+	#endif	
+	#ifndef _SCHEDULER_START_TICK
 	#define _SCHEDULER_START_TICK()		TCCR3B |= (1 << CS30)
+	#endif	
+	#ifndef _SCHEDULER_LOAD_ISR_REG
 	#define _SCHEDULER_LOAD_ISR_REG()	TCNT3 = 0xffff-TASK_INTERRUPT_TICKS
+	#endif	
+	#ifndef _SCHEDULER_EN_ISR
 	#define _SCHEDULER_EN_ISR()			TIMSK3 |= (1 << TOIE3)
-		
+	#endif		
 #elif SCHEDULER_INT_VECTOR == TIMER2_OVF_vect
-		
+	#ifndef _SCHEDULER_STOP_TICK
 	#define _SCHEDULER_STOP_TICK()		TCCR2B &= ~(1 << CS20 | 1 << CS21 | 1 << CS22)
+	#endif	
+	#ifndef _SCHEDULER_START_TICK
 	#define _SCHEDULER_START_TICK()		TCCR2B |= (1 << CS20 | 1 << CS22)
+	#endif	
+	#ifndef _SCHEDULER_LOAD_ISR_REG
 	#define _SCHEDULER_LOAD_ISR_REG()	TCNT2 = 0xff-TASK_INTERRUPT_TICKS
+	#endif	
+	#ifndef _SCHEDULER_EN_ISR
 	#define _SCHEDULER_EN_ISR()			TIMSK2 |= (1 << TOIE2)
-		
+	#endif		
 #elif SCHEDULER_INT_VECTOR == TIMER1_OVF_vect
-	
+	#ifndef _SCHEDULER_STOP_TICK
 	#define _SCHEDULER_STOP_TICK()		TCCR1B &= ~(1 << CS10 | 1 << CS11 | 1 << CS12)	
+	#endif	
+	#ifndef _SCHEDULER_START_TICK
 	#define _SCHEDULER_START_TICK()		TCCR1B |= (1 << CS10 )
+	#endif	
+	#ifndef _SCHEDULER_LOAD_ISR_REG
 	#define _SCHEDULER_LOAD_ISR_REG()	TCNT1 = 0xffff-TASK_INTERRUPT_TICKS
+	#endif	
+	#ifndef _SCHEDULER_EN_ISR
 	#define _SCHEDULER_EN_ISR()			TIMSK1 |= (1 << TOIE1)
-		
+	#endif		
 #elif SCHEDULER_INT_VECTOR == TIMER0_OVF_vect
-		
+	#ifndef _SCHEDULER_STOP_TICK
 	#define _SCHEDULER_STOP_TICK()		TCCR0B &= ~(1 << CS00 | 1 << CS01 | 1 << CS02)
+	#endif	
+	#ifndef _SCHEDULER_START_TICK
 	#define _SCHEDULER_START_TICK()		TCCR0B |= (1 << CS00 | 1 << CS02)
+	#endif	
+	#ifndef _SCHEDULER_LOAD_ISR_REG
 	#define _SCHEDULER_LOAD_ISR_REG()	TCNT0 = 0xff-TASK_INTERRUPT_TICKS
+	#endif	
+	#ifndef _SCHEDULER_EN_ISR
 	#define _SCHEDULER_EN_ISR()			TIMSK0 |= (1 << TOIE0)
-	
+	#endif	
 
 #elif SCHEDULER_INT_VECTOR == WDT_vect
-
+	#ifndef _SCHEDULER_STOP_TICK
 	#define _SCHEDULER_STOP_TICK()		
+	#endif	
+	#ifndef _SCHEDULER_START_TICK
 	#define _SCHEDULER_START_TICK()		
+	#endif	
+	#ifndef _SCHEDULER_LOAD_ISR_REG
 	#define _SCHEDULER_LOAD_ISR_REG()	WDTCSR |= 1 << WDIE
+	#endif	
+	#ifndef _SCHEDULER_EN_ISR
 	#define _SCHEDULER_EN_ISR()		
-
+	#endif
 #else 
-	#error ISR Not currently supported by task scheduler
+	#warning ISR Built in not currently supported by task scheduler. You must define your own terms.
 #endif
 
 #define _SCHEDULER_LAUNCH_ISR()		_SCHEDULER_STOP_TICK(); _SCHEDULER_EN_ISR(); _SCHEDULER_LOAD_ISR_REG(); _SCHEDULER_START_TICK()
@@ -1031,9 +1061,20 @@ extern void TaskYield(TaskTimeout_t counts);
 extern void TaskSetYield(TaskIndiceType_t taskIndex, TaskTimeout_t counts);
 
 
-extern uint8_t YieldRequestDataCopy(TaskIndiceType_t id, void *memDestinationAddress, void *memSourceAddress, uint8_t bytes);
-extern uint8_t RequestDataCopy(void *memDestinationAddress, void *memSourceAddress, uint8_t bytes);
+extern uint8_t TaskYieldRequestDataCopy(TaskIndiceType_t id, void *memDestinationAddress, void *memSourceAddress, uint8_t bytes);
+extern uint8_t TaskRequestDataCopy(void *memDestinationAddress, void *memSourceAddress, uint8_t bytes);
+extern uint8_t TaskYieldWriteData(TaskIndiceType_t id, void *memDestinationAddress, void *data, uint8_t bytes);
+extern uint8_t TaskRequestDataWrite(void *memDestinationAddress, void *data, uint8_t bytes);
 
+
+///Helper for writing to a port, or a register, or whatever, when passing constant values. Ex. TaskWriteData(PORTB, 0x0F, writeStatus); 
+#define TaskWriteData(_memDestination, _dataToWrite, _writeStatusOut)  do { typeof(_dataToWrite) _d = _dataToWrite; _writeStatusOut = TaskRequestDataWrite((void *)&_memDestination, &_d, sizeof(_d));  } while(0)
+
+///Helper for writing to a port, or a register, or whatever, when passing constant values. Ex. TaskWaitForDataWrite(PORTB, 0x0F); 
+#define TaskWaitForDataWrite(_memDestination, _dataToWrite)  do { typeof(_dataToWrite) _d = _dataToWrite; while(!TaskRequestDataWrite((void *)&_memDestination, &_d, sizeof(_d)));  } while(0)
+
+///Helper for writing to a port, or a register, or whatever, when passing constant values. Ex. TaskYieldForDataWrite(taskID, PORTB, 0x0F); 
+#define TaskYieldForDataWrite(_taskID, _memDestination, _dataToWrite)  do { typeof(_dataToWrite) _d = _dataToWrite; TaskYieldWriteData(_taskID, (void *)&_memDestination, &_d, sizeof(_d) );  } while(0)
 
 
 //----------------------------------------------------------------------------------------------------

@@ -5,7 +5,6 @@
  */
 #include <avr/io.h>
 #include <avr/interrupt.h>
-
 #include <stdbool.h>
 
 #include "PreemptiveTaskScheduler.h"
@@ -930,7 +929,7 @@ void TaskSetYield(TaskIndiceType_t taskIndex, TaskTimeout_t counts)
 /**
 * \brief Requests data is copied from the source address to the destination address, yielding when unable to access
 */
-uint8_t YieldRequestDataCopy(TaskIndiceType_t id, void *memDestinationAddress, void *memSourceAddress, uint8_t bytes)
+uint8_t TaskYieldRequestDataCopy(TaskIndiceType_t id, void *memDestinationAddress, void *memSourceAddress, uint8_t bytes)
 {
 	uint8_t state = 0;
 	
@@ -980,7 +979,7 @@ uint8_t YieldRequestDataCopy(TaskIndiceType_t id, void *memDestinationAddress, v
 /**
 * \brief Requests data is copied from the source address to the destination address, exiting when unable to access
 */
-uint8_t RequestDataCopy(void *memDestinationAddress, void *memSourceAddress, uint8_t bytes)
+uint8_t TaskRequestDataCopy(void *memDestinationAddress, void *memSourceAddress, uint8_t bytes)
 {
 	uint8_t state = 0;
 	
@@ -1007,6 +1006,119 @@ uint8_t RequestDataCopy(void *memDestinationAddress, void *memSourceAddress, uin
 			state = 1;
 		}
 		
+	}
+	
+	//Disable Global interrupts
+	__asm__ __volatile__("cli \n\t":::"memory");
+	
+	m_semMemoryAccessor -= 1;
+	
+	if(m_semMemoryAccessor < 0)
+	{
+		m_semMemoryAccessor = 0;
+	}
+	
+	//Re enable interrupts
+	__asm__ __volatile__("sei \n\t":::"memory");
+	
+	return state;
+}
+
+
+
+/**
+* \brief Writes the data passed to memory passed directly, as opposed to using memcpy. Yields until the data can be written.
+* \param id The tasks ID
+* \param memDestinationAddress The place where to write data
+* \param data The data to write
+* \param bytes The amount of bytes to write
+* \ret 0 is we were able to write, 1 if not
+*/
+uint8_t TaskYieldWriteData(TaskIndiceType_t id, void *memDestinationAddress, void *data, uint8_t bytes)
+{
+	uint8_t state = 0;
+	
+	if(m_semMemoryAccessor > 0)
+	{
+		TaskSetYield(id,10);
+	}
+	
+	//Disable Global interrupts
+	__asm__ __volatile__("cli \n\t":::"memory");
+	
+	m_semMemoryAccessor++;
+	
+	
+	//Re enable interrupts
+	__asm__ __volatile__("sei \n\t":::"memory");
+	
+	
+	
+	
+	if((TaskMemoryLocationType_t)memDestinationAddress < RAMEND && (bytes + (TaskMemoryLocationType_t)memDestinationAddress) < RAMEND)
+	{
+		for(uint8_t i = 0; i < bytes; i++)
+		{
+			*((uint8_t *)(memDestinationAddress+i)) = *((uint8_t *)(data+i));
+		}
+		
+		state = 1;
+	}
+	
+	//Disable Global interrupts
+	__asm__ __volatile__("cli \n\t":::"memory");
+	
+	m_semMemoryAccessor -= 1;
+	
+	if(m_semMemoryAccessor < 0)
+	{
+		m_semMemoryAccessor = 0;
+	}
+	
+	//Re enable interrupts
+	__asm__ __volatile__("sei \n\t":::"memory");
+	
+	return state;
+}
+
+
+
+/**
+* \brief Writes the data passed to memory passed directly, as opposed to using memcpy
+* \param memDestinationAddress The place where to write data
+* \param data The data to write
+* \param bytes The amount of bytes to write
+* \ret 0 is we were able to write, 1 if not
+*/
+uint8_t TaskRequestDataWrite(void *memDestinationAddress, void *data, uint8_t bytes)
+{
+	uint8_t state = 0;
+	
+	if(m_semMemoryAccessor > 0)
+	{
+		return 0;
+	}
+	
+	//Disable Global interrupts
+	__asm__ __volatile__("cli \n\t":::"memory");
+	
+	m_semMemoryAccessor++;
+	
+	
+	//Re enable interrupts
+	__asm__ __volatile__("sei \n\t":::"memory");
+	
+	
+	
+	
+	if((TaskMemoryLocationType_t)memDestinationAddress < RAMEND && (bytes + (TaskMemoryLocationType_t)memDestinationAddress) < RAMEND)
+	{
+		for(uint8_t i = 0; i < bytes; i++)
+		{
+			*((uint8_t *)(memDestinationAddress+i)) = *((uint8_t *)(data+i));
+		}
+		
+		state = 1;
 	}
 	
 	//Disable Global interrupts
