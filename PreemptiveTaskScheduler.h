@@ -23,9 +23,12 @@ extern "C" {
 #endif /* __cplusplus */
 
 
+#include <stdint.h>
+
+
 ///Maximum Amount Of Tasks Allowed
 #ifndef MAX_TASKS
-#define MAX_TASKS				11//10
+#define MAX_TASKS				11
 #endif
 
 ///The default timeout counts for tasks
