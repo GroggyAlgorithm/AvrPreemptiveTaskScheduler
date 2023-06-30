@@ -10,7 +10,8 @@
  * https://github.com/kcuzner/kos-avr + http://kevincuzner.com/2015/12/31/writing-a-preemptive-task-scheduler-for-avr/ \n
  * https://gist.github.com/dheeptuck/da0a347358e60c77ea259090a61d78f4 \n
  * https://medium.com/@dheeptuck/building-a-real-time-operating-system-rtos-ground-up-a70640c64e93 \n
- * https://www.cs.princeton.edu/courses/archive/fall16/cos318/projects/project3/p3.html
+ * https://www.cs.princeton.edu/courses/archive/fall16/cos318/projects/project3/p3.html \n
+ * https://www.nongnu.org/avr-libc/user-manual/inline_asm.html \n
  *
  */ 
 #ifndef __PREEMPTIVETASKSCHEDULER_H__
