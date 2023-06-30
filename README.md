@@ -2,7 +2,9 @@
 Preemptive task scheduling and concurrent functionality on AVR
 
 
-Tested on the Atmega1284, have yet to try anything else but there shouldn't be much issues (in theory)
+
+Tested on the Atmega1284 in Atmel/Microchip Studio, have yet to try anything else but there shouldn't be much issues (in theory) and it should be compatible with the Arduino framework and the Arduino Uno, at least partially. if not, a config file can most likely take care of it, look over the header file and the macros.
+
 
 
 <hr>
@@ -23,6 +25,13 @@ A mutual exclusion lock that are used by one thread to stop concurrent access to
 
 
 
+### Preemtion
+<br>
+I'm at home and about to go to dinner, I'll add this later.
+
+
+
+
 ### Semaphore
 <br>
 A variable or abstract data type used to control access to a common resource
@@ -37,35 +46,20 @@ A variable or abstract data type used to control access to a common resource
 
 <br>
 The function args stopped working and now the id is not passing into its func ptr as it did earlier.
-I'm not sure what I changed but previously the context switching passed additional arguments into the defined tasks but now, either the compiler optomized out or I've broken in some way
+I'm not sure what I changed but previously the context switching passed additional arguments into the defined tasks but now, I assume it's the way I have the struct organized.
 
 <br>
 
-### Latency
-
-<br>
-
-Latency has been getting bad after so many tasks are scheduled. Using timer overflow interrupt 3, the timing has needed to change a lot o accommodate for this but it has been a little difficult to tune.
-
-<br>
 
 ### Circular array
 
 <br>
 
-Tasks are currently in a circular array but I would like to see them set up as pointers in a circular list, maybe to just get rid of the requirement for MAX_TASKS.
+Tasks are currently in a circular array but I would like to see them set up as pointers in a circular list, I think it can help with priority control when that's implemented.
 
 <br>
 
 
-### Semaphores, Mutexs, and blocking
-
-<br>
-
-Blocking sometimes works, blocking sometimes doesn't. It seems to be related to the amount of tasks scheduled. The semaphores and mutex related things I've tried to setup does no always work, in a very annoying way. 
-
-
-<br>
 
 
 ### Classes...?
