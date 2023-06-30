@@ -6,6 +6,7 @@
  * \brief Example usage of the preemptive task scheduler. \n
  * PORTA:0 is connected to 5v (connect to ground to see a change) and PORTA:1 is connected to ground \n
  * PORTD and PORTC:7 is connected to LED's with 300 ohm pull down resistors \n
+ * PORTB will also run through each pin setting high and then low \n
  * Created using the Atmega1284, uses PORTA for adc, PORTD for LED blinking, and PORTC:7 for blinking. 12Mhz external crystal. \n
  */ 
 
@@ -20,6 +21,10 @@
 
 ///The amount of max tasks we're allowed
 #define MAX_TASKS				11
+
+#define SCHEDULER_INT_VECTOR	TIMER3_OVF_vect
+
+#define TASK_INTERRUPT_TICKS	0x1ff
 
 #include "PreemptiveTaskScheduler.h"
 
@@ -67,14 +72,14 @@ static void Task8(void);
 static void Task9(void);
 static void AdcGetter(void);
 static uint16_t TaskReadAdc(TaskIndiceType_t tid, uint8_t adcChannel);
-	
+
 //------------------------------------------------------------------
 
 
 
 /**
 * \brief Drop in point. Change name and call in main if that's better
-*
+* ExampleMain, main
 */
 int main(void)
 {
@@ -90,6 +95,9 @@ int main(void)
 	
 	//Short delay, just in case (:
 	_delay_ms(10);
+	
+	
+	
 	
 	//Schedule our quitable tasks
 	ScheduleTask(QuitableTask);
@@ -263,7 +271,9 @@ static void Task0()
 	
 	while(1)
 	{
-		RequestDataCopy(&adcValue, m_AdcValues, 2);
+		
+		TaskRequestDataCopy(&adcValue, m_AdcValues, 2);
+		
 		
 		if(adcValue > 700)
 		{
@@ -387,19 +397,43 @@ static void Task2(void)
 
 
 /**
-* \brief Task that forever blinks D:4
+* \brief Task that forever blinks D:4 and PORTB
 */
 static void Task3(void)
 {
 	volatile TaskIndiceType_t tid = GetCurrentTask();
-	
+	uint8_t pout = 0x01;
+	volatile uint8_t testStatus = 0;
 	while(1)
 	{
 		if(GetTaskStatus(tid) == TASK_READY)
 		{
+			
+			PORTB = 0;
+			
+			TaskSetYield(tid, 750);
+			
+			TaskWaitForDataWrite(PORTB, 0xff);
+			
+			TaskSetYield(tid, 750);
+			
+			//Alternatively, if using a variable...
+			
+			//if(TaskRequestDataCopy((void *)&PORTB, &pout, 1))
+			//{
+				//if(pout & 0x80)
+				//{
+					//pout = 0x01;
+				//}
+				//else
+				//{
+					//pout <<= 1;	
+				//}
+			//}
+
 			__asm__ __volatile__("nop");
 			PORTD ^= (1 << 4);
-			TaskSetYield(tid, 750);
+
 		}
 	}
 	
@@ -595,7 +629,7 @@ static void AdcGetter(void)
 	{
 		currentAdcValue = SampleAdc(currentAdcIndex,2);
 		
-		YieldRequestDataCopy(tid, m_AdcValues+(currentAdcIndex*2), &currentAdcValue, 2);
+		TaskYieldRequestDataCopy(tid, m_AdcValues+(currentAdcIndex*2), &currentAdcValue, 2);
 		
 		currentAdcIndex += 1;
 		
@@ -619,7 +653,7 @@ static uint16_t TaskReadAdc(TaskIndiceType_t tid, uint8_t adcChannel)
 {
 	uint16_t adcValue = 0;
 	
-	YieldRequestDataCopy(tid, &adcValue, m_AdcValues+(adcChannel*2), 2);
+	TaskYieldRequestDataCopy(tid, &adcValue, m_AdcValues+(adcChannel*2), 2);
 	
 	return adcValue;
 }
