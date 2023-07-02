@@ -54,6 +54,15 @@ A variable or abstract data type used to control access to a common resource
 
 <br>
 
+
+<br>
+
+### Prioritizing Tasks
+<br>
+The big part, I need to add task priority levels for additional task ordering. Shouldn't be too hard, I just have to add a struct bit field variable and reorder the tasks upon each full iteration of the task collection...right? 
+<br>
+
+
 ### Task arguments/params
 
 <br>
