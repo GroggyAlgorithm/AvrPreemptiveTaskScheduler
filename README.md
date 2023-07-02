@@ -37,7 +37,7 @@ A mutual exclusion lock that are used by one thread to stop concurrent access to
 <br>
 
 
-### Preemtion
+### Preemption
 <br>
 I'm at home and about to go to dinner, I'll add this later.
 <br>
