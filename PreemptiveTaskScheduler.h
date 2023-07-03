@@ -32,11 +32,6 @@ extern "C" {
 #define MAX_TASKS				11
 #endif
 
-///The default timeout counts for tasks
-#ifndef TASK_DEFAULT_TIMEOUT
-#define TASK_DEFAULT_TIMEOUT	0
-#endif
-
 ///The amount of registers in the task general purpose file register
 #ifndef TASK_REGISTERS
 #define TASK_REGISTERS			32
@@ -57,6 +52,12 @@ extern "C" {
 #ifndef MAX_TASK_STACK_SIZE
 #define MAX_TASK_STACK_SIZE		64
 #endif
+
+///Main keyword for interrupts (ex. ISR for AVR)
+#ifndef SCHEDULER_INTERRUPT_KEYWORD
+#define SCHEDULER_INTERRUPT_KEYWORD ISR
+#endif
+
 
 #if SCHEDULER_INT_VECTOR == TIMER3_OVF_vect
 	#ifndef _SCHEDULER_STOP_TICK
@@ -194,23 +195,35 @@ typedef uint8_t TaskRegisterType_t;
 typedef uint16_t TaskMemoryLocationType_t;
 
 ///Data type for timeouts
-typedef uint16_t TaskTimeout_t;
+typedef int16_t TaskTimeout_t;
+
+///Data type for priority level. Highest value comes first.
+typedef uint8_t TaskPriorityLevel_t;
 
 
+
+typedef enum TaskSchedule_t
+{
+	TASK_SCHEDULE_ROUND_ROBIN,
+	TASK_SCHEDULE_PRIORITY
+}
+/**
+* \brief The task scheduling algorithm/Schedule type to use
+*/
+TaskSchedule_t;
 
 
 
 typedef enum TaskStatus_t
 {
-	TASK_NONE = 0,//-1,
+	TASK_NONE = 0,
 	TASK_READY = 1,
-	TASK_SEMAPHORE = 2,
-	TASK_BLOCKED = 3,
-	TASK_SLEEP = 4,
-	TASK_YIELD = 5,
-	TASK_MAIN = 6, //Special reserved status for 'main' tasks
-	TASK_SCHEDULED = 7,
-	TASK_KILL = 8
+	TASK_BLOCKED = 2,
+	TASK_SLEEP = 3,
+	TASK_YIELD = 4,
+	TASK_MAIN = 5, //Special reserved status for 'main' tasks
+	TASK_SCHEDULED = 6,
+	TASK_KILL = 7
 	
 }
 /**
@@ -288,15 +301,17 @@ typedef struct TaskControl_t
 	//Current set timeout
 	TaskTimeout_t timeout;
 	
+	//The default timeout value. How long or if any timeout should exist when finishing a count.
+	TaskTimeout_t defaultTimeout;
+	
 	//The ID of this task
 	TaskIndiceType_t taskID;
 	
 	//Allocated space
 	void *_taskStack;
 	
-	//For handling data request
-	
-	//For handling data request responses
+	//Task priority level, if setting enabled
+	TaskPriorityLevel_t priority;
 	
 	//The next task control
 	//struct TaskControl_t *next;
@@ -1030,12 +1045,16 @@ __attribute__((naked)) static void RestoreContext(volatile TaskContext_t *taskCo
 
 extern __attribute__ ((weak)) void _TaskSwitch(void);
 
+extern void SetTaskDefaultTimeout(TaskIndiceType_t id, TaskTimeout_t timeout);
+extern void SetTaskSchedule(TaskSchedule_t schedule);
+extern void SetTaskPriority(TaskIndiceType_t id, TaskPriorityLevel_t priority);
 extern const bool AreTaskRunning();
 extern const TaskIndiceType_t GetCurrentTask();
 extern const TaskIndiceType_t _GetTaskID(TaskIndiceType_t index);
 extern TaskIndiceType_t _GetTaskIndex(TaskIndiceType_t id);
 extern TaskStatus_t GetTaskStatus(TaskIndiceType_t id);
 extern void SetTaskStatus(TaskIndiceType_t id, TaskStatus_t status);
+
 
 extern void AttachIDTask(void (*func)(TaskIndiceType_t));
 extern void AttachTask(void (*func)(void ));

@@ -22,10 +22,107 @@ static TaskIndiceType_t m_TaskBlockCount = 0;
 volatile TaskControl_t *m_CurrentTask;
 
 ///Semaphore value for accessing memory, registers, ex. adc, etc.
-static SemaphoreValueType_t m_semMemoryAccessor;
+static SemaphoreValueType_t m_semMemoryAccessor = 0;
 
 ///If the tasks have started running
 static bool m_blnTasksRunning = false;
+
+///The type of task schedule to use
+static TaskSchedule_t m_TaskSchedule = TASK_SCHEDULE_ROUND_ROBIN;
+
+
+/**
+* \brief Sets the default timeout for the task at the ID
+* \param id The task to set
+* \param timeout The value that after each timeout countdown, the timeout should reset to
+*/
+inline void SetTaskDefaultTimeout(TaskIndiceType_t id, TaskTimeout_t timeout)
+{
+	//If our ID is within range...
+	if(id >= 0 && id <= MAX_TASKS)
+	{
+		//Set our priority
+		m_TaskControl[id].defaultTimeout = timeout;
+	}
+}
+
+
+
+/**
+* \brief Sets the type of scheduling used
+*
+*/
+inline void SetTaskSchedule(TaskSchedule_t schedule)
+{
+	m_TaskSchedule = schedule;
+}
+
+
+/**
+* \brief Uses memcpy to swap tasks a and b
+*
+*/
+void _MemSwapTasks(TaskControl_t *taskA, TaskControl_t *taskB)
+{
+	//Intermediary value. Too many "complex" data types to easily use the ^ option ):
+	TaskControl_t tmpTask;
+	memcpy(&tmpTask,taskA, sizeof(TaskControl_t));
+	memcpy(taskA,taskB, sizeof(TaskControl_t));
+	memcpy(taskB, &tmpTask, sizeof(TaskControl_t));
+}
+
+
+
+/**
+* \brief Reorders the task control collection based on priority settings
+*
+*/
+__attribute__ ((weak)) void _PriorityReorderTasks(void)
+{
+	//Loop through all tasks and...
+	for(TaskIndiceType_t i = 1; i <= MAX_TASKS; i++)
+	{
+		//If our current priority level is set higher than our previous priority level...
+		if(m_TaskControl[i].priority > m_TaskControl[i-1].priority)
+		{
+			//Loop through all tasks and...
+			for(TaskIndiceType_t j = i; j > 0; j--)
+			{				
+				//If our current priority level is set higher than our previous priority level...
+				if(m_TaskControl[j].priority > m_TaskControl[j-1].priority)
+				{
+					//Move to the front
+					_MemSwapTasks(&m_TaskControl[j], &m_TaskControl[j-1]);
+				}
+				//else...
+				else
+				{
+					//break outta here
+					break;
+				}
+			}
+		}
+	}
+	
+}
+
+
+
+/**
+* \brief Sets the priority level of the task with the passed ID
+* \param id The id of the task
+* \param priority The priority level for the task at the id. The higher the priority value, the higher the tasks priority
+*/
+inline void SetTaskPriority(TaskIndiceType_t id, TaskPriorityLevel_t priority)
+{
+	//If our ID is within range...
+	if(id >= 0 && id < MAX_TASKS)
+	{
+		//Set our priority
+		m_TaskControl[id].priority = priority;
+	}
+}
+
 
 
 /**
@@ -150,8 +247,12 @@ void AttachIDTask(void (*func)(TaskIndiceType_t))
 		//Default to scheduled
 		m_TaskControl[m_TaskBlockIndex].taskStatus = TASK_SCHEDULED;
 		
-		//Set our default timeout
-		m_TaskControl[m_TaskBlockIndex].timeout = TASK_DEFAULT_TIMEOUT;
+		//Set our default timeouts
+		m_TaskControl[m_TaskBlockIndex].timeout = 0;
+		m_TaskControl[m_TaskBlockIndex].defaultTimeout = 0;
+		
+		//Set our default priority
+		m_TaskControl[m_TaskBlockIndex].priority = 0;
 		
 		/*
 			Function pointer args
@@ -238,12 +339,16 @@ void AttachTask(void (*func)(void))
 		//Default to scheduled
 		m_TaskControl[m_TaskBlockIndex].taskStatus = TASK_SCHEDULED;
 		
-		//Set our default timeout
-		m_TaskControl[m_TaskBlockIndex].timeout = TASK_DEFAULT_TIMEOUT;
+		//Set our default timeouts
+		m_TaskControl[m_TaskBlockIndex].timeout = 0;
+		m_TaskControl[m_TaskBlockIndex].defaultTimeout = 0;
 		
 		//initialize stack pointer and program counter for our program execution
 		m_TaskControl[m_TaskBlockIndex].taskExecutionContext.sp.ptr = ((uint8_t *)m_TaskControl[m_TaskBlockIndex]._taskStack);
 		m_TaskControl[m_TaskBlockIndex].taskExecutionContext.pc.ptr = (void *)func;
+		
+		//Set our default priority
+		m_TaskControl[m_TaskBlockIndex].priority = 0;
 
 		//Increment our index
 		m_TaskBlockIndex++;
@@ -290,12 +395,16 @@ void AttachTaskAt(void (*func)(void), TaskIndiceType_t index)
 		//Default to scheduled
 		m_TaskControl[index].taskStatus = TASK_SCHEDULED;
 		
-		//Set our default timeout
-		m_TaskControl[index].timeout = TASK_DEFAULT_TIMEOUT;
+		//Set our default timeouts
+		m_TaskControl[index].timeout = 0;
+		m_TaskControl[index].defaultTimeout = 0;
 		
 		//initialize stack pointer and program counter for our program execution
 		m_TaskControl[index].taskExecutionContext.sp.ptr = ((uint8_t *)m_TaskControl[index]._taskStack);
 		m_TaskControl[index].taskExecutionContext.pc.ptr = (void *)func;
+		
+		//Set our default priority
+		m_TaskControl[index].priority = 0;
 
 		//Increment our index
 		index++;
@@ -355,12 +464,16 @@ void AttachTaskPointer(void *taskPtr)
 		//Default to scheduled
 		m_TaskControl[m_TaskBlockIndex].taskStatus = TASK_SCHEDULED;
 		
-		//Set our default timeout
-		m_TaskControl[m_TaskBlockIndex].timeout = TASK_DEFAULT_TIMEOUT;
+		//Set our default timeouts
+		m_TaskControl[m_TaskBlockIndex].timeout = 0;
+		m_TaskControl[m_TaskBlockIndex].defaultTimeout = 0;
 		
 		//initialize stack pointer and program counter for our program execution
 		m_TaskControl[m_TaskBlockIndex].taskExecutionContext.sp.ptr = ((uint8_t *)m_TaskControl[m_TaskBlockIndex]._taskStack);
 		m_TaskControl[m_TaskBlockIndex].taskExecutionContext.pc.ptr = taskPtr;
+		
+		//Set our default priority
+		m_TaskControl[m_TaskBlockIndex].priority = 0;
 
 		//Increment our m_TaskBlockIndex
 		m_TaskBlockIndex++;
@@ -404,12 +517,16 @@ void AttachTaskPointerAt(void *taskPtr, TaskIndiceType_t index)
 		//Default to scheduled
 		m_TaskControl[index].taskStatus = TASK_SCHEDULED;
 		
-		//Set our default timeout
-		m_TaskControl[index].timeout = TASK_DEFAULT_TIMEOUT;
+		//Set our default timeouts
+		m_TaskControl[index].timeout = 0;
+		m_TaskControl[index].defaultTimeout = 0;
 		
 		//initialize stack pointer and program counter for our program execution
 		m_TaskControl[index].taskExecutionContext.sp.ptr = ((uint8_t *)m_TaskControl[index]._taskStack);
 		m_TaskControl[index].taskExecutionContext.pc.ptr = taskPtr;
+		
+		//Set our default priority
+		m_TaskControl[index].priority = 0;
 
 		//Increment our index
 		index++;
@@ -456,9 +573,12 @@ int8_t _KillTaskImmediate(TaskIndiceType_t index)
 	m_TaskControl[index].taskExecutionContext.sreg = 0;
 	m_TaskControl[index].taskData = 0;
 	m_TaskControl[index].task_func = 0;
+	m_TaskControl[index].priority = 0;
 	
-	//Reset our timeout to its default
-	m_TaskControl[index].timeout = TASK_DEFAULT_TIMEOUT;
+	
+	//Reset our timeouts
+	m_TaskControl[index].timeout = 0;
+	m_TaskControl[index].defaultTimeout = 0;
 	
 	//Set the id to out of range
 	m_TaskControl[index].taskID = -1;
@@ -548,9 +668,12 @@ int8_t _KillAllTasksImmediate()
 		m_TaskControl[index].taskExecutionContext.sreg = 0;
 		m_TaskControl[index].taskData = 0;
 		m_TaskControl[index].task_func = 0;
-	
-		//Reset our timeout to its default
-		m_TaskControl[index].timeout = TASK_DEFAULT_TIMEOUT;
+		m_TaskControl[index].priority = 0;
+		
+		//Reset our timeouts
+		m_TaskControl[index].timeout = 0;
+		m_TaskControl[index].defaultTimeout = 0;
+
 	
 		//Set the id to out of range
 		m_TaskControl[index].taskID = -1;
@@ -633,7 +756,8 @@ void DispatchTasks()
 		m_TaskControl[MAX_TASKS].task_func = (void *)_EmptyTask;
 		
 		//Set our default timeout
-		m_TaskControl[MAX_TASKS].timeout = TASK_DEFAULT_TIMEOUT;
+		m_TaskControl[MAX_TASKS].timeout = 0;
+		m_TaskControl[MAX_TASKS].defaultTimeout = 0;
 		
 		//initialize stack pointer and program counter for our program execution
 		m_TaskControl[MAX_TASKS].taskExecutionContext.sp.ptr = ((uint8_t *)m_TaskControl[MAX_TASKS]._taskStack + sizeof(TASK_STACK_SIZE) - 1);
@@ -641,6 +765,9 @@ void DispatchTasks()
 		
 		//Set our current task to the last possible task, this way when entering for the first time we will loop to the first
 		m_CurrentTask = &m_TaskControl[MAX_TASKS];
+		
+		//Set the max tasks control to the lowest possible
+		m_TaskControl[MAX_TASKS].priority = 0;
 		
 		//Set our tasks running to true
 		m_blnTasksRunning = true;
@@ -706,7 +833,8 @@ void StartTasks(void (*mainfunc)(void))
 		m_TaskControl[MAX_TASKS].task_func = (void *)mainfunc;
 		
 		//Set our default timeout
-		m_TaskControl[MAX_TASKS].timeout = TASK_DEFAULT_TIMEOUT;
+		m_TaskControl[MAX_TASKS].timeout = 0;
+		m_TaskControl[MAX_TASKS].defaultTimeout = 0;
 		
 		//initialize stack pointer and program counter for our program execution
 		m_TaskControl[MAX_TASKS].taskExecutionContext.sp.ptr = ((uint8_t *)m_TaskControl[MAX_TASKS]._taskStack + sizeof(TASK_STACK_SIZE) - 1);
@@ -714,6 +842,9 @@ void StartTasks(void (*mainfunc)(void))
 		
 		//Set our current task to the last possible task, this way when entering for the first time we will loop to the first
 		m_CurrentTask = &m_TaskControl[MAX_TASKS];
+		
+		//Set the max tasks control to the highest possible, having it always run first when priority based
+		m_TaskControl[MAX_TASKS].priority = 0xff;
 		
 		//Set our tasks running to true
 		m_blnTasksRunning = true;
@@ -837,6 +968,9 @@ void TaskSleep(TaskIndiceType_t taskIndex, TaskTimeout_t counts)
 	//Disable interrupts
 	asm volatile("cli":::"memory");
 	
+	//Save our tasks status
+	volatile TaskStatus_t savedStatus = m_TaskControl[taskIndex].taskStatus;
+	
 	//Save our timeout counts
 	m_TaskControl[taskIndex].timeout = counts;
 	
@@ -852,6 +986,9 @@ void TaskSleep(TaskIndiceType_t taskIndex, TaskTimeout_t counts)
 		m_TaskControl[taskIndex].taskStatus = TASK_SLEEP;
 		m_TaskControl[taskIndex].timeout -= 1;
 	}
+	
+	//Revert back to our saved status before exiting
+	m_TaskControl[taskIndex].taskStatus = savedStatus;
 	
 }
 
@@ -935,17 +1072,10 @@ uint8_t TaskYieldRequestDataCopy(TaskIndiceType_t id, void *memDestinationAddres
 	
 	while(m_semMemoryAccessor > 0)
 	{
-		TaskSetYield(id,10);
+		TaskSetYield(id,1);
 	}
 	
-	//Disable Global interrupts
-	__asm__ __volatile__("cli \n\t":::"memory");
-	
 	m_semMemoryAccessor++;
-	
-	
-	//Re enable interrupts
-	__asm__ __volatile__("sei \n\t":::"memory");
 	
 	
 	if((TaskMemoryLocationType_t)memDestinationAddress < RAMEND && (bytes + (TaskMemoryLocationType_t)memDestinationAddress) < RAMEND)
@@ -958,18 +1088,12 @@ uint8_t TaskYieldRequestDataCopy(TaskIndiceType_t id, void *memDestinationAddres
 		
 	}
 	
-	//Disable Global interrupts
-	__asm__ __volatile__("cli \n\t":::"memory");
-	
 	m_semMemoryAccessor -= 1;
 	
 	if(m_semMemoryAccessor < 0)
 	{
 		m_semMemoryAccessor = 0;
 	}
-	
-	//Re enable interrupts
-	__asm__ __volatile__("sei \n\t":::"memory");
 	
 	return state;
 }
@@ -985,18 +1109,12 @@ uint8_t TaskRequestDataCopy(void *memDestinationAddress, void *memSourceAddress,
 	
 	if(m_semMemoryAccessor > 0)
 	{
+		
 		return 0;
+		
 	}
 	
-	//Disable Global interrupts
-	__asm__ __volatile__("cli \n\t":::"memory");
-	
 	m_semMemoryAccessor++;
-	
-	
-	//Re enable interrupts
-	__asm__ __volatile__("sei \n\t":::"memory");
-	
 	
 	if((TaskMemoryLocationType_t)memDestinationAddress < RAMEND && (bytes + (TaskMemoryLocationType_t)memDestinationAddress) < RAMEND)
 	{	
@@ -1008,8 +1126,6 @@ uint8_t TaskRequestDataCopy(void *memDestinationAddress, void *memSourceAddress,
 		
 	}
 	
-	//Disable Global interrupts
-	__asm__ __volatile__("cli \n\t":::"memory");
 	
 	m_semMemoryAccessor -= 1;
 	
@@ -1017,9 +1133,6 @@ uint8_t TaskRequestDataCopy(void *memDestinationAddress, void *memSourceAddress,
 	{
 		m_semMemoryAccessor = 0;
 	}
-	
-	//Re enable interrupts
-	__asm__ __volatile__("sei \n\t":::"memory");
 	
 	return state;
 }
@@ -1038,23 +1151,15 @@ uint8_t TaskYieldWriteData(TaskIndiceType_t id, void *memDestinationAddress, voi
 {
 	uint8_t state = 0;
 	
-	if(m_semMemoryAccessor > 0)
+	while(m_semMemoryAccessor > 0)
 	{
-		TaskSetYield(id,10);
+		TaskSetYield(id,1);
 	}
 	
-	//Disable Global interrupts
-	__asm__ __volatile__("cli \n\t":::"memory");
-	
+
 	m_semMemoryAccessor++;
-	
-	
-	//Re enable interrupts
-	__asm__ __volatile__("sei \n\t":::"memory");
-	
-	
-	
-	
+
+
 	if((TaskMemoryLocationType_t)memDestinationAddress < RAMEND && (bytes + (TaskMemoryLocationType_t)memDestinationAddress) < RAMEND)
 	{
 		for(uint8_t i = 0; i < bytes; i++)
@@ -1065,9 +1170,7 @@ uint8_t TaskYieldWriteData(TaskIndiceType_t id, void *memDestinationAddress, voi
 		state = 1;
 	}
 	
-	//Disable Global interrupts
-	__asm__ __volatile__("cli \n\t":::"memory");
-	
+
 	m_semMemoryAccessor -= 1;
 	
 	if(m_semMemoryAccessor < 0)
@@ -1075,9 +1178,7 @@ uint8_t TaskYieldWriteData(TaskIndiceType_t id, void *memDestinationAddress, voi
 		m_semMemoryAccessor = 0;
 	}
 	
-	//Re enable interrupts
-	__asm__ __volatile__("sei \n\t":::"memory");
-	
+
 	return state;
 }
 
@@ -1099,16 +1200,9 @@ uint8_t TaskRequestDataWrite(void *memDestinationAddress, void *data, uint8_t by
 		return 0;
 	}
 	
-	//Disable Global interrupts
-	__asm__ __volatile__("cli \n\t":::"memory");
-	
+
 	m_semMemoryAccessor++;
-	
-	
-	//Re enable interrupts
-	__asm__ __volatile__("sei \n\t":::"memory");
-	
-	
+
 	
 	
 	if((TaskMemoryLocationType_t)memDestinationAddress < RAMEND && (bytes + (TaskMemoryLocationType_t)memDestinationAddress) < RAMEND)
@@ -1121,19 +1215,14 @@ uint8_t TaskRequestDataWrite(void *memDestinationAddress, void *data, uint8_t by
 		state = 1;
 	}
 	
-	//Disable Global interrupts
-	__asm__ __volatile__("cli \n\t":::"memory");
-	
+
 	m_semMemoryAccessor -= 1;
 	
 	if(m_semMemoryAccessor < 0)
 	{
 		m_semMemoryAccessor = 0;
 	}
-	
-	//Re enable interrupts
-	__asm__ __volatile__("sei \n\t":::"memory");
-	
+
 	return state;
 }
 
@@ -1173,34 +1262,53 @@ __attribute__ ((weak)) void _TaskSwitch(void)
 		m_TaskControl[m_TaskBlockIndex].taskExecutionContext.sreg = 0;
 		m_TaskControl[m_TaskBlockIndex].taskData = 0;
 		m_TaskControl[m_TaskBlockIndex].task_func = 0;
-		m_TaskControl[m_TaskBlockIndex].timeout = TASK_DEFAULT_TIMEOUT;
+		m_TaskControl[m_TaskBlockIndex].priority = 0;
+		m_TaskControl[m_TaskBlockIndex].timeout = 0;
+		m_TaskControl[m_TaskBlockIndex].defaultTimeout = 0;
 		m_TaskControl[m_TaskBlockIndex].taskID = -1;
 		m_TaskControl[m_TaskBlockIndex].taskStatus = TASK_NONE;
 		
 	}
-	//else If our new process is not set to blocked...
-	else if(m_TaskControl[m_TaskBlockIndex].taskStatus != TASK_BLOCKED && m_TaskControl[m_TaskBlockIndex].taskStatus != TASK_NONE)
+	//else If our new process is not set to blocked, none, or sleep...
+	else if(m_TaskControl[m_TaskBlockIndex].taskStatus != TASK_BLOCKED && m_TaskControl[m_TaskBlockIndex].taskStatus != TASK_NONE && m_TaskControl[m_TaskBlockIndex].taskStatus != TASK_SLEEP)
 	{
-		//If our task is set to YIELD...
-		if(m_TaskControl[m_TaskBlockIndex].taskStatus == TASK_YIELD)
+		//If our task counts are greater than 0...
+		if(m_TaskControl[m_TaskBlockIndex].timeout > 0)
 		{
-			//If our task counts are greater than 0...
-			if(m_TaskControl[m_TaskBlockIndex].timeout > 0)
+			
+			//If Decrementing our count is now less than or equal to 0...
+			m_TaskControl[m_TaskBlockIndex].timeout -= 1;
+			
+			if(m_TaskControl[m_TaskBlockIndex].timeout <= 0)
 			{
-				//Decrement our count
-				m_TaskControl[m_TaskBlockIndex].timeout--;
-			}
-			//else...
-			else
-			{
-				//Set task back to ready
-				m_TaskControl[m_TaskBlockIndex].taskStatus = TASK_READY;
-#if TASK_DEFAULT_TIMEOUT != 0
+				//If our task is set to YIELD...
+				if(m_TaskControl[m_TaskBlockIndex].taskStatus == TASK_YIELD)
+				{
+					//Set task back to ready
+					m_TaskControl[m_TaskBlockIndex].taskStatus = TASK_READY;	
+				}
+				
 				//Reset to our default timeout
-				m_TaskControl[m_TaskBlockIndex].timeout = TASK_DEFAULT_TIMEOUT;
-#endif
+				m_TaskControl[m_TaskBlockIndex].timeout = m_TaskControl[m_TaskBlockIndex].defaultTimeout;
 			}
 		}
+		
+	}
+	
+	//If we're at our first task...
+	if(m_TaskBlockIndex == 0)
+	{
+		//Check our schedule type
+		switch (m_TaskSchedule)
+		{
+			case TASK_SCHEDULE_PRIORITY:
+				_PriorityReorderTasks();
+			break;
+			
+			default:
+				break;
+		};
+		
 	}
 	
 	//Safety counter
@@ -1259,8 +1367,9 @@ __attribute__ ((weak)) void _TaskSwitch(void)
 	//While our tasks are either blocked, set to none, or are set to be killed
 	while(m_TaskControl[m_TaskBlockIndex].taskStatus == TASK_BLOCKED || m_TaskControl[m_TaskBlockIndex].taskStatus == TASK_NONE || m_TaskControl[m_TaskBlockIndex].taskStatus == TASK_KILL);
 	
-
-
+	
+	
+	
 	//If our new process is not set to a blocked status...
 	if(m_TaskControl[m_TaskBlockIndex].taskStatus != TASK_BLOCKED && m_TaskControl[m_TaskBlockIndex].taskStatus != TASK_NONE && m_TaskControl[m_TaskBlockIndex].taskStatus != TASK_KILL)
 	{
@@ -1288,6 +1397,9 @@ __attribute__ ((weak)) void _TaskSwitch(void)
 		m_CurrentTask = &m_TaskControl[MAX_TASKS];
 	}
 	
+	
+	
+	
 }
 
 
@@ -1296,7 +1408,7 @@ __attribute__ ((weak)) void _TaskSwitch(void)
 * \brief Interrupt service routine for our task scheduler
 *
 */
-ISR(SCHEDULER_INT_VECTOR, ISR_NAKED)
+SCHEDULER_INTERRUPT_KEYWORD(SCHEDULER_INT_VECTOR, ISR_NAKED)
 {
 	//Make sure other interrupts are disabled
 	__asm__ __volatile__("cli \n\t":::"memory");
