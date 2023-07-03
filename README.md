@@ -37,9 +37,9 @@ A mutual exclusion lock that are used by one thread to stop concurrent access to
 <br>
 
 
-### Preemption
+### Preemption and Preemptive Scheduling
 <br>
-I'm at home and about to go to dinner, I'll add this later.
+In computing, preemption is the act of temporarily interrupting an executing task, with the intention of resuming it at a later time.
 <br>
 
 
@@ -57,9 +57,13 @@ A variable or abstract data type used to control access to a common resource
 
 <br>
 
-### Prioritizing Tasks
+### Prioritizing Tasks, Round Robin, Shortest Remaining Time First, etc...
 <br>
-The big part, I need to add task priority levels for additional task ordering. Shouldn't be too hard, I just have to add a struct bit field variable and reorder the tasks upon each full iteration of the task collection...right? 
+The big part, I need to add task priority levels for additional task ordering, remaining times, or something addition. Shouldn't be too hard, I just have to add a struct variable and reorder the tasks upon each full iteration of the task collection or add to a waiting collection...right? 
+
+
+
+The trick is reducing used resources. I want to limit some counts and timing for fastest compatability with 8 bit devices. I would like to have an enum set up for management styles. Round Robin, SRTF, Priorities, and all that. I want to allow for modularity but I don't want an excessive amount of processes executing with other tasks.
 <br>
 
 
