@@ -57,8 +57,11 @@ A variable or abstract data type used to control access to a common resource
 
 <br>
 
-
-
+### Mildly broke memory semaphores...or maybe the examples destroyed by removing volatile keywords? ):
+<br>
+ADC reading is no longer coming back appropriatly.
+Parts seem to not work as well now and are a bit more unpredictable. This happened upon changing some of the functionality for task switching and when adding additional setups and things. I'm not sure what happened, but it became very...touchy. 
+<br>
 
 ### Classes...?
 
@@ -79,7 +82,6 @@ All of this, especially when related to the ID, may work better as a class objec
 ## Example usage:
 
 <br>
-
 
 ### Some addition usage info: 
 <br>
