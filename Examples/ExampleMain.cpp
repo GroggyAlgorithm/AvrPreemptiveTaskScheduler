@@ -24,7 +24,7 @@
 
 #define SCHEDULER_INT_VECTOR	TIMER3_OVF_vect
 
-#define TASK_INTERRUPT_TICKS	0x1ff
+#define TASK_INTERRUPT_TICKS	0x1f0
 
 #include "PreemptiveTaskScheduler.h"
 
@@ -225,7 +225,7 @@ uint16_t SampleAdc(uint8_t adcChannel, uint8_t sampleCount)
 static void QuitableTask(void)
 {
 	//Get ID
-	volatile TaskIndiceType_t tid = GetCurrentTask();
+	TaskIndiceType_t tid = GetCurrentTask();
 	
 	for(uint8_t i = 0; i < 10; i++)
 	{
@@ -245,7 +245,7 @@ static void QuitableTask(void)
 static void QuitableTask2(void)
 {
 	//Get ID
-	volatile TaskIndiceType_t tid = GetCurrentTask();
+	TaskIndiceType_t tid = GetCurrentTask();
 	
 	for(uint8_t i = 0; i < 5; i++)
 	{
@@ -264,7 +264,7 @@ static void QuitableTask2(void)
 */
 static void Task0()
 {
-	volatile TaskIndiceType_t tid = GetCurrentTask();
+	TaskIndiceType_t tid = GetCurrentTask();
 	uint16_t adcValue = 0;
 	uint16_t counter = 150;
 	bool countDir = false;
@@ -277,34 +277,30 @@ static void Task0()
 		
 		if(adcValue > 700)
 		{
-			if(GetTaskStatus(tid) == TASK_READY)
-			{
-				__asm__ __volatile__("nop");
-				PORTD ^= (1 << 7);
-				TaskSetYield(tid,counter);
-				//TaskYield(countDir);
+			__asm__ __volatile__("nop");
+			PORTD ^= (1 << 7);
+			TaskSetYield(tid,counter);
 			
-				if(countDir == true)
+			if(countDir == true)
+			{
+				if(counter >= 150)
 				{
-					if(counter >= 150)
-					{
-						countDir = false;
-					}
-					else
-					{
-						counter++;
-					}
+					countDir = false;
 				}
 				else
 				{
-					if(counter <= 10)
-					{
-						countDir = true;
-					}
-					else
-					{
-						counter--;
-					}
+					counter++;
+				}
+			}
+			else
+			{
+				if(counter <= 10)
+				{
+					countDir = true;
+				}
+				else
+				{
+					counter--;
 				}
 			}
 		}
@@ -335,10 +331,10 @@ static void Task0()
 */
 static void Task1(void)
 {
-	volatile TaskIndiceType_t tid = GetCurrentTask();
-	volatile uint8_t counter = 0;
+	TaskIndiceType_t tid = GetCurrentTask();
+	uint8_t counter = 0;
 	volatile uint16_t adcValue = 0;
-	volatile TaskIndiceType_t savedTN = 0;
+	TaskIndiceType_t savedTN = 0;
 	
 	
 	while(1)
@@ -377,16 +373,13 @@ static void Task1(void)
 */
 static void Task2(void)
 {
-	volatile TaskIndiceType_t tid = GetCurrentTask();
+	TaskIndiceType_t tid = GetCurrentTask();
 	
 	while(1)
 	{
-		if(GetTaskStatus(tid) == TASK_READY)
-		{
-			__asm__ __volatile__("nop");
-			PORTD ^= (1 << 5);
-			TaskSetYield(tid, 500);
-		}
+		__asm__ __volatile__("nop");
+		PORTD ^= (1 << 5);
+		TaskSetYield(tid, 500);
 	}
 	
 	//Exit if we reached here
@@ -401,40 +394,17 @@ static void Task2(void)
 */
 static void Task3(void)
 {
-	volatile TaskIndiceType_t tid = GetCurrentTask();
+	TaskIndiceType_t tid = GetCurrentTask();
 	uint8_t pout = 0x01;
-	volatile uint8_t testStatus = 0;
+	uint8_t testStatus = 0;
 	while(1)
 	{
-		if(GetTaskStatus(tid) == TASK_READY)
-		{
-			
-			PORTB = 0;
-			
+			TaskWaitForDataWrite(PORTB, 0);
+			TaskSetYield(tid, 750);		
+			TaskYieldForDataWrite(tid, PORTB, 0xff);
 			TaskSetYield(tid, 750);
-			
-			TaskWaitForDataWrite(PORTB, 0xff);
-			
-			TaskSetYield(tid, 750);
-			
-			//Alternatively, if using a variable...
-			
-			//if(TaskRequestDataCopy((void *)&PORTB, &pout, 1))
-			//{
-				//if(pout & 0x80)
-				//{
-					//pout = 0x01;
-				//}
-				//else
-				//{
-					//pout <<= 1;	
-				//}
-			//}
-
 			__asm__ __volatile__("nop");
 			PORTD ^= (1 << 4);
-
-		}
 	}
 	
 	//Exit if we reached here
@@ -448,16 +418,13 @@ static void Task3(void)
 */
 static void Task4(void)
 {
-	volatile TaskIndiceType_t tid = GetCurrentTask();
+	TaskIndiceType_t tid = GetCurrentTask();
 	
 	while(1)
 	{
-		if(GetTaskStatus(tid) == TASK_READY)
-		{
-			__asm__ __volatile__("nop");
-			PORTD ^= (1 << 3);
-			TaskSetYield(tid, 400);
-		}
+		__asm__ __volatile__("nop");
+		PORTD ^= (1 << 3);
+		TaskSetYield(tid, 400);
 	}
 	
 	//Exit if we reached here
@@ -471,16 +438,13 @@ static void Task4(void)
 */
 static void Task5(void)
 {
-	volatile TaskIndiceType_t tid = GetCurrentTask();
+	TaskIndiceType_t tid = GetCurrentTask();
 	
 	while(1)
 	{
-		if(GetTaskStatus(tid) == TASK_READY)
-		{
-			__asm__ __volatile__("nop");
-			PORTD ^= (1 << 2);
-			TaskSetYield(tid, 250);
-		}
+		__asm__ __volatile__("nop");
+		PORTD ^= (1 << 2);
+		TaskSetYield(tid, 250);
 	}
 	
 	//Exit if we reached here
@@ -494,16 +458,13 @@ static void Task5(void)
 */
 static void Task6(void)
 {
-	volatile TaskIndiceType_t tid = GetCurrentTask();
+	TaskIndiceType_t tid = GetCurrentTask();
 	
 	while(1)
 	{
-		if(GetTaskStatus(tid) == TASK_READY)
-		{
-			__asm__ __volatile__("nop");
-			PORTD ^= (1 << 1);
-			TaskSetYield(tid, 851);
-		}
+		__asm__ __volatile__("nop");
+		PORTD ^= (1 << 1);
+		TaskSetYield(tid, 851);
 	}
 	
 	//Exit if we reached here
@@ -517,9 +478,9 @@ static void Task6(void)
 */
 static void Task7(void)
 {
-	volatile TaskIndiceType_t tid = GetCurrentTask();
-	volatile TaskIndiceType_t subTid = -1;
-	volatile bool hasBeenSet = false;
+	TaskIndiceType_t tid = GetCurrentTask();
+	TaskIndiceType_t subTid = -1;
+	bool hasBeenSet = false;
 	while(1)
 	{
 		if(hasBeenSet == false)
@@ -534,12 +495,9 @@ static void Task7(void)
 		}
 		
 		
-		if(GetTaskStatus(tid) == TASK_READY)
-		{
-			__asm__ __volatile__("nop");
-			PORTD ^= (1 << 0);
-			TaskSetYield(tid, 787);
-		}
+		__asm__ __volatile__("nop");
+		PORTD ^= (1 << 0);
+		TaskSetYield(tid, 787);
 
 	}
 	
@@ -556,7 +514,7 @@ static void Task7(void)
 */
 static void Task8(void)
 {
-	volatile TaskIndiceType_t tid = GetCurrentTask();
+	TaskIndiceType_t tid = GetCurrentTask();
 	uint8_t counter = 0;
 	TaskSetYield(tid, 1000);
 	
@@ -591,7 +549,7 @@ static void Task8(void)
 */
 static void Task9(void)
 {
-	volatile TaskIndiceType_t tid = GetCurrentTask();
+	TaskIndiceType_t tid = GetCurrentTask();
 	uint8_t counter = 0;
 	TaskSetYield(tid, 1000);
 	
@@ -620,7 +578,7 @@ static void Task9(void)
 */
 static void AdcGetter(void)
 {
-	volatile TaskIndiceType_t tid = GetCurrentTask();
+	TaskIndiceType_t tid = GetCurrentTask();
 	uint16_t currentAdcValue = 0;
 	uint16_t currentAdcIndex = 0;
 	
