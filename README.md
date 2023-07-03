@@ -57,34 +57,6 @@ A variable or abstract data type used to control access to a common resource
 
 <br>
 
-### Prioritizing Tasks, Round Robin, Shortest Remaining Time First, etc...
-<br>
-The big part, I need to add task priority levels for additional task ordering, remaining times, or something addition. Shouldn't be too hard, I just have to add a struct variable and reorder the tasks upon each full iteration of the task collection or add to a waiting collection...right? 
-
-
-
-The trick is reducing used resources. I want to limit some counts and timing for fastest compatability with 8 bit devices. I would like to have an enum set up for management styles. Round Robin, SRTF, Priorities, and all that. I want to allow for modularity but I don't want an excessive amount of processes executing with other tasks.
-<br>
-
-
-### Task arguments/params
-
-<br>
-The function args stopped working and now the id is not passing into its func ptr as it did earlier.
-I'm not sure what I changed but previously the context switching passed additional arguments into the defined tasks but now, I assume it's the way I have the struct organized but I haven't tried very hard to fix this and I have had little need to do so since reading the task ID when entering the task works great.
-<br>
-
-
-
-
-### Circular array
-
-<br>
-
-Tasks are currently in a circular array but I would like to see them set up as pointers in a circular list, I think it can help with priority control when that's implemented.
-
-<br>
-
 
 
 
@@ -105,6 +77,22 @@ All of this, especially when related to the ID, may work better as a class objec
 
 
 ## Example usage:
+
+<br>
+
+
+### Some addition usage info: 
+<br>
+
+Setting task priority along with default timeouts can really change the way prioritization and scheduling can happen.
+
+<br>
+
+It's best to grab the tasks ID on the way into the tasks function and to always add a task kill loop at the end of the function.
+
+<br>
+
+Setting data through the provided functions can be best to avoid access conflicts, especially when it can take multiple cycles, but it is not always required. User discretion is advised.
 
 <br>
 
