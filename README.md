@@ -1,5 +1,5 @@
 # AvrPreemptiveTaskScheduler
-Preemptive task scheduling and concurrent functionality for Atmega, AVR, Arduino, and similar devices. 
+Preemptive task scheduling and concurrent multitasking functionality for Atmega, AVR, Arduino, and similar devices. 
 
 
 
@@ -7,7 +7,7 @@ Links to resources, influences, additional documents, and etc. can be found in t
 
 
 
-Tested on the Atmega1284 in Atmel/Microchip Studio, have yet to try anything else but there shouldn't be much issues (in theory) and it should be compatible with the Arduino framework and the Arduino Uno, at least partially. If not, a config file can most likely take care of it, look over the header file and the macros and adjust definitions to meet interrupt needs.
+Tested on the Atmega1284 in Atmel/Microchip Studio at 12MHz, have yet to try anything else but there shouldn't be much issues (in theory) and it should be compatible with the Arduino framework and the Arduino Uno, at least partially. If not, a config file can most likely take care of it, look over the header file and the macros and adjust definitions to meet interrupt needs.
 
 
 
@@ -52,15 +52,6 @@ A variable or abstract data type used to control access to a common resource
 
 ## TODO
 
-<br>
-
-
-<br>
-
-### Mildly broke memory semaphores...or maybe the examples destroyed by removing volatile keywords? ):
-<br>
-ADC reading is no longer coming back appropriatly.
-Parts seem to not work as well now and are a bit more unpredictable. This happened upon changing some of the functionality for task switching and when adding additional setups and things. I'm not sure what happened, but it became very...touchy. 
 <br>
 
 ### Classes...?
