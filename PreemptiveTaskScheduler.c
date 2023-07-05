@@ -1072,7 +1072,7 @@ uint8_t TaskYieldRequestDataCopy(TaskIndiceType_t id, void *memDestinationAddres
 	
 	while(m_semMemoryAccessor > 0)
 	{
-		TaskSetYield(id,1);
+		TaskSetYield(id,5);
 	}
 	
 	m_semMemoryAccessor++;
@@ -1153,7 +1153,7 @@ uint8_t TaskYieldWriteData(TaskIndiceType_t id, void *memDestinationAddress, voi
 	
 	while(m_semMemoryAccessor > 0)
 	{
-		TaskSetYield(id,1);
+		TaskSetYield(id,5);
 	}
 	
 
