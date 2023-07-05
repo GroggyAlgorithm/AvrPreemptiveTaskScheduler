@@ -272,8 +272,9 @@ static void Task0()
 	while(1)
 	{
 		
-		TaskRequestDataCopy(&adcValue, m_AdcValues, 2);
-		
+//		TaskRequestDataCopy(&adcValue, m_AdcValues, 2);
+		//TaskYieldRequestDataCopy(tid, &m_AdcValues[0], &adcValue, 2);
+		adcValue = TaskReadAdc(tid, 0);
 		
 		if(adcValue > 700)
 		{
@@ -333,7 +334,7 @@ static void Task1(void)
 {
 	TaskIndiceType_t tid = GetCurrentTask();
 	uint8_t counter = 0;
-	volatile uint16_t adcValue = 0;
+	uint16_t adcValue = 0;
 	TaskIndiceType_t savedTN = 0;
 	
 	
@@ -350,13 +351,12 @@ static void Task1(void)
 			}
 		}
 		
-		else if(GetTaskStatus(tid) == TASK_READY)
+		else
 		{
-			__asm__ __volatile__("nop");
-			PORTD ^= (1 << 6);
-			
-			
-			TaskSetYield(tid,1000);
+			TaskSetYield(tid,500);
+			PORTD |= (1 << 6);
+			TaskSetYield(tid,500);
+			PORTD &= ~(1 << 6);
 		}
 		
 		
@@ -586,8 +586,7 @@ static void AdcGetter(void)
 	while (1)
 	{
 		currentAdcValue = SampleAdc(currentAdcIndex,2);
-		
-		TaskYieldRequestDataCopy(tid, m_AdcValues+(currentAdcIndex*2), &currentAdcValue, 2);
+		TaskYieldRequestDataCopy(tid, &m_AdcValues[currentAdcIndex], &currentAdcValue, 2);
 		
 		currentAdcIndex += 1;
 		
@@ -611,7 +610,7 @@ static uint16_t TaskReadAdc(TaskIndiceType_t tid, uint8_t adcChannel)
 {
 	uint16_t adcValue = 0;
 	
-	TaskYieldRequestDataCopy(tid, &adcValue, m_AdcValues+(adcChannel*2), 2);
+	TaskYieldRequestDataCopy(tid, &adcValue, &m_AdcValues[adcChannel], 2);
 	
 	return adcValue;
 }
