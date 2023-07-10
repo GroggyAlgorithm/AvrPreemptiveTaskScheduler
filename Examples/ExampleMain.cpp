@@ -75,6 +75,7 @@ static uint16_t TaskReadAdc(TaskIndiceType_t tid, uint8_t adcChannel);
 
 //------------------------------------------------------------------
 
+extern TaskControl_t *GetActiveTask();
 
 
 /**
@@ -95,16 +96,15 @@ int main(void)
 	
 	//Short delay, just in case (:
 	_delay_ms(10);
-	
-	
-	
-	
+		
 	//Schedule our quitable tasks
 	ScheduleTask(QuitableTask);
 	ScheduleTask(QuitableTask2);
 	
+
 	//Dispatch the tasks
 	DispatchTasks();
+
 	
 	//Once finished, Schedule our other tasks
 	ScheduleTask(Task0);
@@ -116,6 +116,16 @@ int main(void)
 	ScheduleTask(Task6);
 	ScheduleTask(Task7);
 	ScheduleTask(AdcGetter);
+	
+	#warning setting tasks by priority does not seem to work the best. Sometimes, it breaks everything.
+	SetTaskSchedule(TASK_SCHEDULE_PRIORITY);
+	
+	SetTaskPriority(0, 1);
+	SetTaskPriority(1, 5);
+	SetTaskPriority(2, 2);
+	SetTaskPriority(4, 3);
+	SetTaskPriority(5, 4);
+	SetTaskPriority(3, 5);
 	
 	//Dispatch the tasks
 	DispatchTasks();
@@ -225,7 +235,7 @@ uint16_t SampleAdc(uint8_t adcChannel, uint8_t sampleCount)
 static void QuitableTask(void)
 {
 	//Get ID
-	TaskIndiceType_t tid = GetCurrentTask();
+	TaskIndiceType_t tid = GetCurrentTaskID();
 	
 	for(uint8_t i = 0; i < 10; i++)
 	{
@@ -245,7 +255,7 @@ static void QuitableTask(void)
 static void QuitableTask2(void)
 {
 	//Get ID
-	TaskIndiceType_t tid = GetCurrentTask();
+	TaskIndiceType_t tid = GetCurrentTaskID();
 	
 	for(uint8_t i = 0; i < 5; i++)
 	{
@@ -264,16 +274,13 @@ static void QuitableTask2(void)
 */
 static void Task0()
 {
-	TaskIndiceType_t tid = GetCurrentTask();
+	TaskIndiceType_t tid = GetCurrentTaskID();
 	uint16_t adcValue = 0;
 	uint16_t counter = 150;
 	bool countDir = false;
 	
 	while(1)
 	{
-		
-//		TaskRequestDataCopy(&adcValue, m_AdcValues, 2);
-		//TaskYieldRequestDataCopy(tid, &m_AdcValues[0], &adcValue, 2);
 		adcValue = TaskReadAdc(tid, 0);
 		
 		if(adcValue > 700)
@@ -332,7 +339,7 @@ static void Task0()
 */
 static void Task1(void)
 {
-	TaskIndiceType_t tid = GetCurrentTask();
+	TaskIndiceType_t tid = GetCurrentTaskID();
 	uint8_t counter = 0;
 	uint16_t adcValue = 0;
 	TaskIndiceType_t savedTN = 0;
@@ -373,7 +380,7 @@ static void Task1(void)
 */
 static void Task2(void)
 {
-	TaskIndiceType_t tid = GetCurrentTask();
+	TaskIndiceType_t tid = GetCurrentTaskID();
 	
 	while(1)
 	{
@@ -394,7 +401,7 @@ static void Task2(void)
 */
 static void Task3(void)
 {
-	TaskIndiceType_t tid = GetCurrentTask();
+	TaskIndiceType_t tid = GetCurrentTaskID();
 	uint8_t pout = 0x01;
 	uint8_t testStatus = 0;
 	while(1)
@@ -418,7 +425,7 @@ static void Task3(void)
 */
 static void Task4(void)
 {
-	TaskIndiceType_t tid = GetCurrentTask();
+	TaskIndiceType_t tid = GetCurrentTaskID();
 	
 	while(1)
 	{
@@ -438,7 +445,7 @@ static void Task4(void)
 */
 static void Task5(void)
 {
-	TaskIndiceType_t tid = GetCurrentTask();
+	TaskIndiceType_t tid = GetCurrentTaskID();
 	
 	while(1)
 	{
@@ -458,7 +465,7 @@ static void Task5(void)
 */
 static void Task6(void)
 {
-	TaskIndiceType_t tid = GetCurrentTask();
+	TaskIndiceType_t tid = GetCurrentTaskID();
 	
 	while(1)
 	{
@@ -478,7 +485,7 @@ static void Task6(void)
 */
 static void Task7(void)
 {
-	TaskIndiceType_t tid = GetCurrentTask();
+	TaskIndiceType_t tid = GetCurrentTaskID();
 	TaskIndiceType_t subTid = -1;
 	bool hasBeenSet = false;
 	while(1)
@@ -514,7 +521,7 @@ static void Task7(void)
 */
 static void Task8(void)
 {
-	TaskIndiceType_t tid = GetCurrentTask();
+	TaskIndiceType_t tid = GetCurrentTaskID();
 	uint8_t counter = 0;
 	TaskSetYield(tid, 1000);
 	
@@ -549,7 +556,7 @@ static void Task8(void)
 */
 static void Task9(void)
 {
-	TaskIndiceType_t tid = GetCurrentTask();
+	TaskIndiceType_t tid = GetCurrentTaskID();
 	uint8_t counter = 0;
 	TaskSetYield(tid, 1000);
 	
@@ -578,7 +585,7 @@ static void Task9(void)
 */
 static void AdcGetter(void)
 {
-	TaskIndiceType_t tid = GetCurrentTask();
+	TaskIndiceType_t tid = GetCurrentTaskID();
 	uint16_t currentAdcValue = 0;
 	uint16_t currentAdcIndex = 0;
 	
