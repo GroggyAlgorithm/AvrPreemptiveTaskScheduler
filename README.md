@@ -54,6 +54,15 @@ A variable or abstract data type used to control access to a common resource
 
 <br>
 
+### Semaphores and mutexs
+
+<br>
+
+This is what's next. Planning on adding and improving semaphore and mutex usage.
+
+
+<br>
+
 ### Classes...?
 
 <br>
