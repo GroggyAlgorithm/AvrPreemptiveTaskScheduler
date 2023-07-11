@@ -27,7 +27,7 @@
 #define TASK_INTERRUPT_TICKS	0x1f0
 
 #include "PreemptiveTaskScheduler.h"
-
+#include "mcu_lib/mcuDelays.h"
 //------------------------------------------------------------------
 
 ///Voltage reference mode 1
@@ -52,7 +52,8 @@ static uint16_t m_AdcValues[8] = {0};
 	
 //------------------------------------------------------------------
 
-
+#define verbatim __attribute__((always_inline)) inline
+#define static_extern	__attribute__ ((weakref))
 
 //Functions---------------------------------------------------------
 
@@ -75,7 +76,6 @@ static uint16_t TaskReadAdc(TaskIndiceType_t tid, uint8_t adcChannel);
 
 //------------------------------------------------------------------
 
-extern TaskControl_t *GetActiveTask();
 
 
 /**
@@ -96,7 +96,8 @@ int main(void)
 	
 	//Short delay, just in case (:
 	_delay_ms(10);
-		
+	
+	
 	//Schedule our quitable tasks
 	ScheduleTask(QuitableTask);
 	ScheduleTask(QuitableTask2);
@@ -129,6 +130,7 @@ int main(void)
 	
 	//Dispatch the tasks
 	DispatchTasks();
+	
 	
 	
 	//Loop forever in case something goes wrong
@@ -234,17 +236,14 @@ uint16_t SampleAdc(uint8_t adcChannel, uint8_t sampleCount)
 */
 static void QuitableTask(void)
 {
-	//Get ID
-	TaskIndiceType_t tid = GetCurrentTaskID();
-	
-	for(uint8_t i = 0; i < 10; i++)
+	TASK_SECTION()
 	{
-		PORTD ^= 0xff;
-		TaskSetYield(tid,1500);
+		for(uint8_t i = 0; i < 10; i++)
+		{
+			PORTD ^= 0xff;
+			TaskSetYield(TaskSectionID,1500);
+		}
 	}
-	
-	//Exit
-	while(!KillTask(tid));
 }
 
 
@@ -254,17 +253,14 @@ static void QuitableTask(void)
 */
 static void QuitableTask2(void)
 {
-	//Get ID
-	TaskIndiceType_t tid = GetCurrentTaskID();
-	
-	for(uint8_t i = 0; i < 5; i++)
+	TASK_SECTION()
 	{
-		PORTC ^= (1 << 7);
-		TaskSetYield(tid,1000);
+		for(uint8_t i = 0; i < 5; i++)
+		{
+			PORTC ^= (1 << 7);
+			TaskSetYield(TaskSectionID,1000);
+		}
 	}
-	
-	//Exit
-	while(!KillTask(tid));
 }
 
 
@@ -406,12 +402,30 @@ static void Task3(void)
 	uint8_t testStatus = 0;
 	while(1)
 	{
-			TaskWaitForDataWrite(PORTB, 0);
-			TaskSetYield(tid, 750);		
-			TaskYieldForDataWrite(tid, PORTB, 0xff);
-			TaskSetYield(tid, 750);
+		
+			TASK_CRITICAL_SECTION_LOCK()
+			{
+				PORTB ^= 0xff;
+				TaskSetYield(tid, 750);		
+			}
+			
 			__asm__ __volatile__("nop");
-			PORTD ^= (1 << 4);
+			
+			TASK_CRITICAL_SECTION_LOCK()
+			{
+				PORTB ^= 0xff;
+				TaskSetYield(tid, 375);
+			}
+			
+			__asm__ __volatile__("nop");
+			
+			TASK_CRITICAL_SECTION_LOCK()
+			{
+				PORTD ^= (1 << 4);
+				TaskSetYield(tid, 375);
+			}
+						
+			__asm__ __volatile__("nop");
 	}
 	
 	//Exit if we reached here
@@ -445,13 +459,19 @@ static void Task4(void)
 */
 static void Task5(void)
 {
+	
 	TaskIndiceType_t tid = GetCurrentTaskID();
 	
 	while(1)
 	{
 		__asm__ __volatile__("nop");
-		PORTD ^= (1 << 2);
-		TaskSetYield(tid, 250);
+
+		TASK_CRITICAL_SECTION_LOCK()
+		{
+			PORTD ^= (1 << 2);
+			TaskSetYield(tid, 250);
+		}
+		
 	}
 	
 	//Exit if we reached here
@@ -465,17 +485,13 @@ static void Task5(void)
 */
 static void Task6(void)
 {
-	TaskIndiceType_t tid = GetCurrentTaskID();
-	
-	while(1)
-	{
+	TASK_RUN()
+	{	
 		__asm__ __volatile__("nop");
 		PORTD ^= (1 << 1);
-		TaskSetYield(tid, 851);
+		TaskSetYield(TaskRunID, 851);
+		
 	}
-	
-	//Exit if we reached here
-	while(!KillTask(tid));
 }
 
 
@@ -585,15 +601,17 @@ static void Task9(void)
 */
 static void AdcGetter(void)
 {
-	TaskIndiceType_t tid = GetCurrentTaskID();
 	uint16_t currentAdcValue = 0;
 	uint16_t currentAdcIndex = 0;
 	
-	
-	while (1)
-	{
-		currentAdcValue = SampleAdc(currentAdcIndex,2);
-		TaskYieldRequestDataCopy(tid, &m_AdcValues[currentAdcIndex], &currentAdcValue, 2);
+	TASK_RUN()
+	{ 
+		//Lock it down and...
+		TASK_CRITICAL_SECTION_LOCK()
+		{
+			//Read the adc values without interruption
+			m_AdcValues[currentAdcIndex] = SampleAdc(currentAdcIndex,2);
+		}
 		
 		currentAdcIndex += 1;
 		
@@ -602,10 +620,9 @@ static void AdcGetter(void)
 			currentAdcIndex = 0;
 		}
 		
-		TaskSetYield(tid, 100);
+		TaskSetYield(TaskRunID, 100);
 	}
-	
-	while(!KillTask(tid));
+
 }
 
 
@@ -617,7 +634,12 @@ static uint16_t TaskReadAdc(TaskIndiceType_t tid, uint8_t adcChannel)
 {
 	uint16_t adcValue = 0;
 	
-	TaskYieldRequestDataCopy(tid, &adcValue, &m_AdcValues[adcChannel], 2);
+	//Lock it down and...
+	TASK_CRITICAL_SECTION_LOCK()
+	{
+		adcValue = m_AdcValues[adcChannel];
+	}
+	
 	
 	return adcValue;
 }
