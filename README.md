@@ -45,7 +45,9 @@ In computing, preemption is the act of temporarily interrupting an executing tas
 
 
 ### Semaphore
+
 <br>
+
 A variable or abstract data type used to control access to a common resource
 
 <hr>
@@ -54,14 +56,6 @@ A variable or abstract data type used to control access to a common resource
 
 <br>
 
-### Semaphores and mutexs
-
-<br>
-
-This is what's next. Planning on adding and improving semaphore and mutex usage.
-
-
-<br>
 
 ### Classes...?
 
@@ -80,21 +74,6 @@ All of this, especially when related to the ID, may work better as a class objec
 
 
 ## Example usage:
-
-<br>
-
-### Some addition usage info: 
-<br>
-
-Setting task priority along with default timeouts can really change the way prioritization and scheduling can happen.
-
-<br>
-
-It's best to grab the tasks ID on the way into the tasks function and to always add a task kill loop at the end of the function.
-
-<br>
-
-Setting data through the provided functions can be best to avoid access conflicts, especially when it can take multiple cycles, but it is not always required. User discretion is advised.
 
 <br>
 
