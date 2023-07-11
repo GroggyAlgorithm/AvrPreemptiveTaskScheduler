@@ -8,6 +8,7 @@
 
 
 
+
 #include <avr/io.h>
 
 #ifdef	__cplusplus
@@ -39,13 +40,17 @@ extern "C" {
 
 ///Our task stack size
 #ifndef TASK_STACK_SIZE
-#define TASK_STACK_SIZE		64
+#define TASK_STACK_SIZE			64
 #endif
 
 ///Main keyword for interrupts (ex. ISR for AVR)
 #ifndef SCHEDULER_INTERRUPT_KEYWORD
-#define SCHEDULER_INTERRUPT_KEYWORD ISR
+#define SCHEDULER_INTERRUPT_KEYWORD		ISR
 #endif
+
+
+
+
 
 
 #if SCHEDULER_INT_VECTOR == TIMER3_OVF_vect
@@ -159,5 +164,15 @@ extern "C" {
 #ifdef	__cplusplus
 }
 #endif /* __cplusplus */
+
+
+
+
+
+
+
+
+
+
 
 #endif /* __PREEMPTIVETASKSCHEDULERCONFIG_H___ */

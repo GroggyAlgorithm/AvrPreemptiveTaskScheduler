@@ -24,11 +24,39 @@ extern "C" {
 #endif /* __cplusplus */
 
 
+///Atomic block for tasks, runs with no interrupts and restores post interrupt. When using this version, it is safer to use everywhere
+#define TASK_CRITICAL_SECTION(...) __asm__ __volatile__("cli \n\t":::"memory"); __VA_ARGS__;  __asm__ __volatile__("sei \n\t":::"memory");
+
+///Atomic block for tasks, runs with no interrupts and restores post interrupt, executing the arguments passed before entering the 'loop' but after disabling interrupts. it will break everything if used poorly.
+#define TASK_CRITICAL_SECTION_LOCK(...) __asm__ __volatile__("cli \n\t":::"memory"); __VA_ARGS__; for(unsigned char __crit_locker __attribute__((__cleanup__(__iExitCritical))) = 1, __crit_blocker = 1; __crit_blocker != 0; __crit_blocker = 0)
+
+///Used for entering and exiting tasks, on enter the ID is gotten(you can reference through TaskSectionID) and on EXIT, Kills the task
+#define TASK_SECTION(...) for(TaskIndiceType_t _______id __attribute__((__cleanup__(__iExitTask))) = GetCurrentTaskID(), __blocker = 1; __blocker != 0 && _______id >= 0; __blocker = 0)
+
+///Used for entering and exiting tasks but includes forever loop, on enter the ID is gotten(you can reference through TaskSectionID) and on EXIT, Kills the task. executes the arguments passed before entering the 'loop'
+#define TASK_RUN(...) __VA_ARGS__; for(TaskIndiceType_t _______id __attribute__((__cleanup__(__iExitTask))) = GetCurrentTaskID(), __runner_blocker = 1; __runner_blocker != 0 && _______id >= 0;) while(__runner_blocker != 0)
+
+///Used for the semaphore request block, executes any passed arguments before requesting
+#define TASK_SEM_REQUEST_BLOCK(...) __VA_ARGS__; for(TaskIndiceType_t _____sem __attribute__((__cleanup__(__iExitSem))) = OpenSemaphoreRequest(true); _____sem;)
+
+
+
+///Macro reference to the ID gotten during the current task sections
+#define TaskSectionID		_______id
+#define TaskRunID			_______id
+
+///Helper for exiting a task when using the task section thing
+#define TaskRunExit			__runner_blocker = 0; break;
+
 
 
 #include "PreemptiveTaskSchedulerConfig.h"
 #include "PreemptiveTaskSchedulerTypes.h"
 #include "PreemptiveTaskSchedulerASM.h"
+
+
+
+
 
 
 //FUNCTIONS-------------------------------------------------------------------------------------------
@@ -38,22 +66,13 @@ extern "C" {
 extern __attribute__ ((weak)) void _TaskSwitch(void);
 
 
-//-----------------------------------
-/*
-I recommend looking these over if you use
-*/
-extern const TaskIndiceType_t _GetTaskID(TaskIndiceType_t index);
-extern int8_t _KillTaskImmediate(TaskIndiceType_t index);
-extern int8_t _KillAllTasksImmediate();
-extern void _EmptyTask(void);
-//-----------------------------------
 
-extern uint8_t OpenRequest(bool waitForAccess);
-extern uint8_t CloseRequest();
-extern uint8_t TaskYieldRequestDataCopy(TaskIndiceType_t id, void *memDestinationAddress, void *memSourceAddress, uint8_t bytes);
-extern uint8_t TaskRequestDataCopy(void *memDestinationAddress, void *memSourceAddress, uint8_t bytes);
-extern uint8_t TaskYieldWriteData(TaskIndiceType_t id, void *memDestinationAddress, void *data, uint8_t bytes);
-extern uint8_t TaskRequestDataWrite(void *memDestinationAddress, void *data, uint8_t bytes);
+
+extern TaskPriorityLevel_t FindNextHighestPriorityLevel();
+extern TaskIndiceType_t FindNextHighestPriorityTask();
+extern TaskIndiceType_t FindNextPriorityTask();
+extern uint8_t OpenSemaphoreRequest(bool waitForAccess);
+extern uint8_t CloseSemaphoreRequest();
 extern void SetTaskDefaultTimeout(TaskIndiceType_t id, TaskTimeout_t timeout);
 extern void SetTaskSchedule(TaskSchedule_t schedule);
 extern void SetTaskPriority(TaskIndiceType_t id, TaskPriorityLevel_t priority);
@@ -66,21 +85,22 @@ extern TaskIndiceType_t AttachTask(void *func, TaskIndiceType_t id);
 extern int8_t KillTask(TaskIndiceType_t index);
 extern int8_t KillAllTasks();
 extern void DispatchTasks();
-extern void StartTasks(void (*mainfunc)(void), TaskPriorityLevel_t taskPriority);
+extern void StartTasks(void *mainfunc, TaskPriorityLevel_t taskPriority);
 extern void TaskSleep(TaskIndiceType_t taskIndex, TaskTimeout_t counts);
-extern void TaskYield(TaskTimeout_t counts);
 extern void TaskSetYield(TaskIndiceType_t taskIndex, TaskTimeout_t counts);
 
 
-///Helper for writing to a port, or a register, or whatever, when passing constant values. Ex. TaskWriteData(PORTB, 0x0F, writeStatus); 
-#define TaskWriteData(_memDestination, _dataToWrite, _writeStatusOut)  do { typeof(_dataToWrite) _d = _dataToWrite; _writeStatusOut = TaskRequestDataWrite((void *)&_memDestination, &_d, sizeof(_d));  } while(0)
+//-----------------------------------
 
-///Helper for writing to a port, or a register, or whatever, when passing constant values. Ex. TaskWaitForDataWrite(PORTB, 0x0F); 
-#define TaskWaitForDataWrite(_memDestination, _dataToWrite)  do { typeof(_dataToWrite) _d = _dataToWrite; while(!TaskRequestDataWrite((void *)&_memDestination, &_d, sizeof(_d)));  } while(0)
+/*
+I highly recommend looking these over if you use
+*/
+extern const TaskIndiceType_t _GetTaskID(TaskIndiceType_t index);
+extern int8_t _KillTaskImmediate(TaskIndiceType_t index);
+extern int8_t _KillAllTasksImmediate();
+extern void _EmptyTask(void);
 
-///Helper for writing to a port, or a register, or whatever, when passing constant values. Ex. TaskYieldForDataWrite(taskID, PORTB, 0x0F); 
-#define TaskYieldForDataWrite(_taskID, _memDestination, _dataToWrite)  do { typeof(_dataToWrite) _d = _dataToWrite; TaskYieldWriteData(_taskID, (void *)&_memDestination, &_d, sizeof(_d) );  } while(0)
-
+//-----------------------------------
 
 
 
@@ -89,14 +109,14 @@ extern void TaskSetYield(TaskIndiceType_t taskIndex, TaskTimeout_t counts);
 * \param taskPtr the address of what should be a function
 * \param Returns the id for the scheduled task
 */
-static TaskIndiceType_t ScheduleTaskPointer(void *taskPtr)
+__attribute__ ((unused)) static TaskIndiceType_t ScheduleTaskPointer(void *taskPtr) 
 {
 	TaskIndiceType_t nid = -1;
 	volatile TaskStatus_t taskStatus = TASK_BLOCKED;
 	
 	for(nid = 0; nid < MAX_TASKS; nid++)
 	{
-		taskStatus = GetTaskStatus(nid);
+		TASK_CRITICAL_SECTION ( taskStatus = GetTaskStatus(nid); );
 		
 		if(taskStatus == TASK_NONE)
 		{
@@ -115,14 +135,15 @@ static TaskIndiceType_t ScheduleTaskPointer(void *taskPtr)
 * \param func The function for running the task
 * \param Returns the id for the scheduled task
 */
-static TaskIndiceType_t ScheduleTask(void (*func)(void))
+__attribute__ ((unused)) static TaskIndiceType_t ScheduleTask(void (*func)(void))
 {
 	TaskIndiceType_t nid = -1;
 	volatile TaskStatus_t taskStatus = TASK_BLOCKED;
 	
 	for(nid = 0; nid < MAX_TASKS; nid++)
 	{
-		taskStatus = GetTaskStatus(nid);
+		
+		TASK_CRITICAL_SECTION ( taskStatus = GetTaskStatus(nid) );
 		
 		if(taskStatus == TASK_NONE)
 		{
@@ -135,7 +156,46 @@ static TaskIndiceType_t ScheduleTask(void (*func)(void))
 }
 
 
+
+
+
+
+
+
+
+
+
+
+
+static __attribute__((always_inline)) inline void __iExitTask(const TaskIndiceType_t *__s)
+{
+	while(KillTask(*__s));
+}
+static __attribute__((always_inline)) inline unsigned char __iEnterCritical(void)
+{
+	__asm__ __volatile__("cli \n\t":::"memory");
+	return 1;
+}
+static __attribute__((always_inline)) inline void __iExitCritical(const unsigned char *__s)
+{
+	__asm__ volatile ("sei \n\t" ::: "memory");
+}
+static __attribute__((always_inline)) inline void __iExitSem(const unsigned char *__s)
+{
+	CloseSemaphoreRequest();
+}
+
+
+
+
+
+
 //----------------------------------------------------------------------------------------------------
+
+
+
+
+
 
 
 #ifdef	__cplusplus

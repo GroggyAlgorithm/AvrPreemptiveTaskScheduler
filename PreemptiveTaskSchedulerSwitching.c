@@ -7,6 +7,13 @@
 
 
 
+#if defined(__GNUC__) || defined(GCC)
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wattributes"
+#endif
+
+
+
 
 ///An array block of our task control structures
 static TaskControl_t m_TaskControl[MAX_TASKS+1] __attribute__ ((weakref));
@@ -21,7 +28,7 @@ static TaskIndiceType_t m_TaskBlockCount __attribute__ ((weakref));
 volatile TaskControl_t *m_CurrentTask __attribute__ ((weakref));
 
 ///Semaphore value for accessing memory, registers, ex. adc, etc.
-static SemaphoreValueType_t m_semMemoryAccessor __attribute__ ((weakref));
+static SemaphoreValueType_t m_semMemoryAccessor __attribute__ ((weakref, unused));
 
 ///If the tasks have started running
 static bool m_blnTasksRunning __attribute__ ((weakref));
@@ -30,6 +37,144 @@ static bool m_blnTasksRunning __attribute__ ((weakref));
 static TaskSchedule_t m_TaskSchedule __attribute__ ((weakref));
 
 
+#if defined(__GNUC__)
+#pragma GCC diagnostic pop
+#endif
+
+
+
+/**
+* \brief Returns the next of the upcoming priority levels
+*
+*/
+__attribute__ ((weak)) TaskPriorityLevel_t FindNextHighestPriorityLevel()
+{
+	TaskPriorityLevel_t p=-1;
+	
+	for (TaskIndiceType_t t = m_TaskBlockIndex+1; t <= MAX_TASKS; t++)
+	{
+		if(m_TaskControl[t].priority > p)
+		{
+			p=m_TaskControl[t].priority;
+		}
+	}
+	
+	return p;
+}
+
+
+
+/**
+* \brief Returns the next task with the highest of the upcoming priority levels
+*
+*/
+__attribute__ ((weak)) TaskIndiceType_t FindNextHighestPriorityTask()
+{
+	TaskIndiceType_t rt=m_TaskBlockIndex;
+	TaskPriorityLevel_t p=-1;
+
+	for (TaskIndiceType_t t = 0; t <= MAX_TASKS; t++)
+	{
+		if(m_TaskControl[t].priority >= p && m_TaskControl[t].taskStatus != TASK_BLOCKED && m_TaskControl[t].taskStatus != TASK_NONE && m_TaskControl[t].taskStatus != TASK_KILL && t != m_TaskBlockIndex)
+		{
+			p=m_TaskControl[t].priority;
+			rt = t;
+		}
+		else if(p < 0 && m_TaskControl[t].taskStatus == TASK_MAIN)
+		{
+			p=m_TaskControl[t].priority;
+			rt = t;
+		}
+	}
+	return rt;
+}
+
+
+
+/**
+* \brief Returns the next task with the highest of the upcoming priority levels but excludes previously gotten priorities until all possible are added
+*
+*/
+__attribute__ ((weak)) TaskIndiceType_t FindNextPriorityTask()
+{
+	TaskIndiceType_t rt=m_TaskBlockIndex;
+	TaskPriorityLevel_t p=-1;
+	static TaskIndiceType_t taskChecker[MAX_TASKS+1];
+	
+	for (TaskIndiceType_t t = 0; t <= MAX_TASKS; t++)
+	{
+		if(m_TaskControl[t].priority >= p && m_TaskControl[t].taskStatus != TASK_BLOCKED && m_TaskControl[t].taskStatus != TASK_NONE && m_TaskControl[t].taskStatus != TASK_KILL && t != m_TaskBlockIndex)
+		{
+			if(taskChecker[rt] != rt)
+			{
+				p=m_TaskControl[t].priority;
+				rt = t;
+			}
+			
+		}
+		
+	}
+	
+	if(rt == m_TaskBlockIndex)
+	{
+		for(TaskIndiceType_t i = 0; i <= MAX_TASKS; i++)
+		{
+			taskChecker[i] = -1;
+		}
+	}
+	
+	
+	
+	taskChecker[rt] = rt;
+	
+	return rt;
+}
+
+
+
+/**
+* \brief Deep copy from src to dest
+*
+*/
+__attribute__ ((weak)) void _TaskCpy(TaskControl_t *dest, TaskControl_t *src)
+{
+	dest->defaultTimeout = src->defaultTimeout;
+	dest->priority = src->priority;
+	dest->task_func = src->task_func;
+	dest->taskData = src->taskData;
+	dest->taskExecutionContext = src->taskExecutionContext;
+	
+	dest->taskExecutionContext.sreg = src->taskExecutionContext.sreg;
+	dest->taskExecutionContext.sp.ptr = src->taskExecutionContext.sp.ptr;
+	dest->taskExecutionContext.pc.ptr = src->taskExecutionContext.pc.ptr;
+	
+	for(uint8_t i = 0; i < TASK_REGISTERS; i++)
+	{
+		dest->taskExecutionContext.registerFile[i] = src->taskExecutionContext.registerFile[i];
+	}
+	
+	
+	dest->taskID = src->taskID;
+	dest->taskStatus = src->taskStatus;
+	dest->timeout = src->timeout;
+	dest->_taskStack = src->_taskStack;
+}
+
+
+
+/**
+* \brief Swaps tasks a and b
+*
+*/
+__attribute__ ((weak)) void _MemSwapTasks(TaskControl_t *taskA, TaskControl_t *taskB)
+{
+	//Intermediary value. Too many "complex" data types to easily use the ^ option ):
+	TaskControl_t tmpTask;
+	
+	_TaskCpy(&tmpTask, taskA);
+	_TaskCpy(taskA, taskB);
+	_TaskCpy(taskB, &tmpTask);
+}
 
 
 
@@ -64,6 +209,10 @@ __attribute__ ((weak)) void _PriorityReorderTasks(void)
 		}
 	}
 }
+
+
+
+
 
 
 
@@ -121,21 +270,63 @@ __attribute__ ((weak)) void _TaskSwitch(void)
 		}
 	}
 	
-	
-	//If we're at our first task...
-	if(m_TaskBlockIndex == 0)
+	if(m_TaskSchedule != TASK_SCHEDULE_ROUND_ROBIN)
 	{
 		//Check our schedule type
 		switch (m_TaskSchedule)
 		{
 			case TASK_SCHEDULE_PRIORITY:
-				_PriorityReorderTasks();
+				m_TaskBlockIndex = (FindNextPriorityTask()-1);
+				if(--m_TaskControl[m_TaskBlockIndex].priority < 0)
+				{
+					m_TaskControl[m_TaskBlockIndex].priority = m_TaskControl[m_TaskBlockIndex].cachedPriority;
+				}
+			break;
+			
+			
+			//Requires a specialized task manager for ordering and changing
+			case TASK_SCHEDULE_PRIORITY_STRICT:
+				
+				if(m_TaskBlockIndex == MAX_TASKS)
+				{
+					m_TaskBlockIndex = (FindNextHighestPriorityTask()-1);
+				}
+				else
+				{
+					m_TaskBlockIndex = MAX_TASKS - 1;
+				}
+				
+			break;
+			
+			//Prioritizes function status's marked as MAIN to operate every other interrupt
+			case TASK_SCHEDULE_PRIORITY_MAIN:
+				
+				if(m_TaskBlockIndex == MAX_TASKS)
+				{
+					m_TaskBlockIndex = (FindNextPriorityTask()-1);
+					if(--m_TaskControl[m_TaskBlockIndex].priority < 0)
+					{
+						m_TaskControl[m_TaskBlockIndex].priority = m_TaskControl[m_TaskBlockIndex].cachedPriority;
+					}
+				}
+				else
+				{
+					m_TaskBlockIndex = MAX_TASKS - 1;
+				}
+				
+			break;
+			
+			
+			case TASK_SCHEDULE_PRIORITY_REORDER:
+				if(m_TaskBlockIndex == 0)
+				{
+					_PriorityReorderTasks();	
+				}
 			break;
 			
 			default:
 			break;
 		};
-		
 	}
 	
 	//Safety counter
@@ -231,6 +422,15 @@ __attribute__ ((weak)) void _TaskSwitch(void)
 }
 
 
+#if defined(__GNUC__) || defined(GCC)
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wreturn-type"
+
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wimplicit-int"
+#endif
+
+
 
 /**
 * \brief Interrupt service routine for our task scheduler
@@ -257,3 +457,10 @@ SCHEDULER_INTERRUPT_KEYWORD(SCHEDULER_INT_VECTOR, ISR_NAKED)
 	__asm__ __volatile__("sei \n\t":::"memory");
 	__asm__ __volatile__("reti \n"::);
 }
+
+
+
+#if defined(__GNUC__) || defined(GCC)
+#pragma GCC diagnostic pop
+#pragma GCC diagnostic pop
+#endif

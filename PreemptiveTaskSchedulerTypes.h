@@ -43,12 +43,25 @@ typedef int16_t TaskTimeout_t;
 typedef int16_t TaskPriorityLevel_t;
 
 
+//TASK_SCHEDULE_LRT, //Lowest remaining time, didn't make work well ): 
 
 typedef enum TaskSchedule_t
 {
-	TASK_SCHEDULE_ROUND_ROBIN,
-	TASK_SCHEDULE_PRIORITY,
-	//TASK_SCHEDULE_LRT, //Lowest remaining time, doesn't work ): 
+	TASK_SCHEDULE_ROUND_ROBIN = 0,
+
+	///Runs based on the next highest priority out of the priorities that have not been run yet
+	TASK_SCHEDULE_PRIORITY = 1,
+
+	///Strictly selects next based on priorities that must be changed elsewhere
+	TASK_SCHEDULE_PRIORITY_STRICT = 2, 
+	
+	///Prioritizes tasks marked with the status 'main' and runs them ever other interrupt
+	TASK_SCHEDULE_PRIORITY_MAIN = 3,
+	
+	///physically reorders the task collection based on priorities
+	TASK_SCHEDULE_PRIORITY_REORDER = 4
+	
+	
 }
 /**
 * \brief The task scheduling algorithm/Schedule type to use
@@ -155,7 +168,9 @@ typedef struct TaskControl_t
 	
 	//Task priority level, if setting enabled
 	TaskPriorityLevel_t priority;
-
+	
+	//Saved priority level
+	TaskPriorityLevel_t cachedPriority;
 }
 
 /**

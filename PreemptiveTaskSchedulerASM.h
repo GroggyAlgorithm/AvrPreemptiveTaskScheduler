@@ -197,7 +197,7 @@ _ASM_RESTORE_CONTEXT( "lds ZL, " #_ptr " \n\t" "lds ZH, " #_ptr " + 1 \n\t")
  * \brief Saves program context into the passed Context
  * \param taskContext The context structure to save to
  */
-__attribute__((naked)) static void SaveContext(volatile TaskContext_t *taskContext)
+__attribute__((naked, unused)) static void SaveContext(volatile TaskContext_t *taskContext)
 {
 	
 	asm volatile
@@ -363,7 +363,7 @@ __attribute__((naked)) static void SaveContext(volatile TaskContext_t *taskConte
  * \param taskContextA The context structure to save to
  * \param taskContextB The context structure to restore from
  */
-__attribute__((naked)) static void SwapContext(volatile TaskContext_t *taskContextA, volatile TaskContext_t *taskContextB)
+__attribute__((naked, unused)) static void SwapContext(volatile TaskContext_t *taskContextA, volatile TaskContext_t *taskContextB)
 {
 
 	/*
@@ -629,7 +629,7 @@ __attribute__((naked)) static void SwapContext(volatile TaskContext_t *taskConte
  * \brief Restores from passed Context
  * \param taskContext The context structure to restore from
  */
-__attribute__((naked)) static void RestoreContext(volatile TaskContext_t *taskContext)
+__attribute__((naked, unused)) static void RestoreContext(volatile TaskContext_t *taskContext)
 {
 	
 	/*
