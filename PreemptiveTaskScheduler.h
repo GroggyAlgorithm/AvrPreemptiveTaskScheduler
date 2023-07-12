@@ -31,10 +31,10 @@ extern "C" {
 #define TASK_CRITICAL_SECTION_LOCK(...) __asm__ __volatile__("cli \n\t":::"memory"); __VA_ARGS__; for(unsigned char __crit_locker __attribute__((__cleanup__(__iExitCritical))) = 1, __crit_blocker = 1; __crit_blocker != 0; __crit_blocker = 0)
 
 ///Used for entering and exiting tasks, on enter the ID is gotten(you can reference through TaskSectionID) and on EXIT, Kills the task
-#define TASK_SECTION(...) for(TaskIndiceType_t _______id __attribute__((__cleanup__(__iExitTask))) = GetCurrentTaskID(), __blocker = 1; __blocker != 0 && _______id >= 0; __blocker = 0)
+#define TASK_SECTION(...) for(TaskIndiceType_t _______tid __attribute__((__cleanup__(__iExitTask))) = GetCurrentTaskID(), __blocker = 1; __blocker != 0 && _______tid >= 0; __blocker = 0)
 
 ///Used for entering and exiting tasks but includes forever loop, on enter the ID is gotten(you can reference through TaskSectionID) and on EXIT, Kills the task. executes the arguments passed before entering the 'loop'
-#define TASK_RUN(...) __VA_ARGS__; for(TaskIndiceType_t _______id __attribute__((__cleanup__(__iExitTask))) = GetCurrentTaskID(), __runner_blocker = 1; __runner_blocker != 0 && _______id >= 0;) while(__runner_blocker != 0)
+#define TASK_RUN(...) __VA_ARGS__; for(TaskIndiceType_t _______rid __attribute__((__cleanup__(__iExitTask))) = GetCurrentTaskID(), __runner_blocker = 1; __runner_blocker != 0 && _______rid >= 0;) while(__runner_blocker != 0)
 
 ///Used for the semaphore request block, executes any passed arguments before requesting
 #define TASK_SEM_REQUEST_BLOCK(...) __VA_ARGS__; for(TaskIndiceType_t _____sem __attribute__((__cleanup__(__iExitSem))) = OpenSemaphoreRequest(true); _____sem;)
@@ -42,8 +42,8 @@ extern "C" {
 
 
 ///Macro reference to the ID gotten during the current task sections
-#define TaskSectionID		_______id
-#define TaskRunID			_______id
+#define TaskSectionID		_______tid
+#define TaskRunID			_______rid
 
 ///Helper for exiting a task when using the task section thing
 #define TaskRunExit			__runner_blocker = 0; break;
