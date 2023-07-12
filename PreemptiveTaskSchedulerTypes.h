@@ -59,8 +59,10 @@ typedef enum TaskSchedule_t
 	TASK_SCHEDULE_PRIORITY_MAIN = 3,
 	
 	///physically reorders the task collection based on priorities
-	TASK_SCHEDULE_PRIORITY_REORDER = 4
+	TASK_SCHEDULE_PRIORITY_REORDER = 4,
 	
+	///Runs based on the next highest priority out of the priorities that have not been run yet but only if the task is set as READY or is tagged as the MAIN task
+	TASK_SCHEDULE_PRIORITY_AND_READY = 5
 	
 }
 /**

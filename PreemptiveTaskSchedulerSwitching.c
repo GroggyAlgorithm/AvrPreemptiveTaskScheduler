@@ -133,6 +133,47 @@ __attribute__ ((weak)) TaskIndiceType_t FindNextPriorityTask()
 
 
 /**
+* \brief Returns the next ready only task with the highest of the upcoming priority levels but excludes previously gotten priorities until all possible are added
+*
+*/
+__attribute__ ((weak)) TaskIndiceType_t FindNextReadyPriorityTask()
+{
+	TaskIndiceType_t rt=m_TaskBlockIndex;
+	TaskPriorityLevel_t p=-1;
+	static TaskIndiceType_t taskChecker[MAX_TASKS+1];
+	
+	for (TaskIndiceType_t t = 0; t <= MAX_TASKS; t++)
+	{
+		if(m_TaskControl[t].priority >= p  && (m_TaskControl[t].taskStatus == TASK_MAIN || m_TaskControl[t].taskStatus == TASK_READY) && t != m_TaskBlockIndex)
+		{
+			if(taskChecker[rt] != rt)
+			{
+				p=m_TaskControl[t].priority;
+				rt = t;
+			}
+			
+		}
+		
+	}
+	
+	if(rt == m_TaskBlockIndex)
+	{
+		for(TaskIndiceType_t i = 0; i <= MAX_TASKS; i++)
+		{
+			taskChecker[i] = -1;
+		}
+	}
+	
+	
+	
+	taskChecker[rt] = rt;
+	
+	return rt;
+}
+
+
+
+/**
 * \brief Deep copy from src to dest
 *
 */
@@ -277,6 +318,15 @@ __attribute__ ((weak)) void _TaskSwitch(void)
 		{
 			case TASK_SCHEDULE_PRIORITY:
 				m_TaskBlockIndex = (FindNextPriorityTask()-1);
+				if(--m_TaskControl[m_TaskBlockIndex].priority < 0)
+				{
+					m_TaskControl[m_TaskBlockIndex].priority = m_TaskControl[m_TaskBlockIndex].cachedPriority;
+				}
+			break;
+			
+			
+			case TASK_SCHEDULE_PRIORITY_AND_READY:
+				m_TaskBlockIndex = (FindNextReadyPriorityTask()-1);
 				if(--m_TaskControl[m_TaskBlockIndex].priority < 0)
 				{
 					m_TaskControl[m_TaskBlockIndex].priority = m_TaskControl[m_TaskBlockIndex].cachedPriority;

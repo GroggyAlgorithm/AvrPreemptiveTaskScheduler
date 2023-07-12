@@ -89,7 +89,6 @@ extern void StartTasks(void *mainfunc, TaskPriorityLevel_t taskPriority);
 extern void TaskSleep(TaskIndiceType_t taskIndex, TaskTimeout_t counts);
 extern void TaskSetYield(TaskIndiceType_t taskIndex, TaskTimeout_t counts);
 
-
 //-----------------------------------
 
 /*
