@@ -30,6 +30,9 @@ extern "C" {
 ///Atomic block for tasks, runs with no interrupts and restores post interrupt, executing the arguments passed before entering the 'loop' but after disabling interrupts. it will break everything if used poorly.
 #define TASK_CRITICAL_SECTION_LOCK(...) __asm__ __volatile__("cli \n\t":::"memory"); __VA_ARGS__; for(unsigned char __crit_locker __attribute__((__cleanup__(__iExitCritical))) = 1, __crit_blocker = 1; __crit_blocker != 0; __crit_blocker = 0)
 
+///Block section for running with the schedulers switching disabled. It would be a very bad time to yield during here.
+#define TASK_SWITCHING_LOCK(...) for(unsigned char __swit_locker __attribute__((__cleanup__(__iExitSchedulerPause))) = 1, __swit_blocker = __iEnterSchedulerPause(); __swit_blocker != 0; __swit_blocker = 0)
+
 ///Used for entering and exiting tasks, on enter the ID is gotten(you can reference through TaskSectionID) and on EXIT, Kills the task
 #define TASK_SECTION(...) for(TaskIndiceType_t _______tid __attribute__((__cleanup__(__iExitTask))) = GetCurrentTaskID(), __blocker = 1; __blocker != 0 && _______tid >= 0; __blocker = 0)
 
@@ -182,6 +185,15 @@ static __attribute__((always_inline)) inline void __iExitCritical(const unsigned
 static __attribute__((always_inline)) inline void __iExitSem(const unsigned char *__s)
 {
 	CloseSemaphoreRequest();
+}
+static __attribute__((always_inline)) inline unsigned char __iEnterSchedulerPause(void)
+{
+	_SCHEDULER_STOP_TICK();
+	return 1;
+}
+static __attribute__((always_inline)) inline void __iExitSchedulerPause(const unsigned char *__s)
+{
+	_SCHEDULER_START_TICK();
 }
 
 
