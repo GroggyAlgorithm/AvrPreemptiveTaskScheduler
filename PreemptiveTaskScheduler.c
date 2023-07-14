@@ -30,7 +30,35 @@ static TaskSchedule_t m_TaskSchedule;
 
 
 
+/**
+* \brief Gets a task that contains the function passed
+* \ret The task control that has the passed function, 0 ptr if none
+*/
+inline TaskControl_t* GetTask(void *task_func)
+{
+	TaskControl_t *task=0;
 
+	//Loop through the tasks and...
+	for(TaskIndiceType_t i = 0; i <= MAX_TASKS; i++)
+	{
+		//Lock the task in to read and...
+		TASK_SWITCHING_LOCK()
+		{
+			//Check for the functions matching. If they match...
+			if(m_TaskControl[i].task_func == task_func)
+			{
+				//Set the control pointer to this control
+				task = &m_TaskControl[i];
+				
+				//And break
+				break;
+			}
+		}
+	}
+	
+	//Return the task
+	return task;
+}
 
 
 /**

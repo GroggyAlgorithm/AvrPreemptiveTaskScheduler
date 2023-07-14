@@ -70,7 +70,7 @@ extern __attribute__ ((weak)) void _TaskSwitch(void);
 
 
 
-
+extern TaskControl_t* GetTask(void *task_func);
 extern TaskPriorityLevel_t FindNextHighestPriorityLevel();
 extern TaskIndiceType_t FindNextHighestPriorityTask();
 extern TaskIndiceType_t FindNextPriorityTask();
