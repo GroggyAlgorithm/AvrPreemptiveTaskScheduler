@@ -180,75 +180,73 @@ inline void SetTaskStatus(TaskIndiceType_t id, TaskStatus_t status)
 */
 void StartTasks(void *mainfunc, TaskPriorityLevel_t taskPriority)
 {
-	//If we have tasks to launch...
-	if(m_TaskBlockCount > 0)
-	{
-		//Disable Global interrupts and execute code
-		TASK_CRITICAL_SECTION (
-		
-			//Set our task index to the start
-			m_TaskBlockIndex = 0;
-		
-			//For each task...
-			for(TaskIndiceType_t i = 0; i < MAX_TASKS; i++)
+	
+	//Disable Global interrupts and execute code
+	TASK_CRITICAL_SECTION (
+	
+		//Set our task index to the start
+		m_TaskBlockIndex = 0;
+	
+		//For each task...
+		for(TaskIndiceType_t i = 0; i < MAX_TASKS; i++)
+		{
+			//If we're within range for our count to set to ready and we meet all settings...
+			if(i < m_TaskBlockCount && m_TaskControl[i].taskStatus != TASK_NONE)
 			{
-				//If we're within range for our count to set to ready and we meet all settings...
-				if(i < m_TaskBlockCount && m_TaskControl[i].taskStatus != TASK_NONE)
-				{
-					//Set to ready
-					m_TaskControl[i].taskStatus = TASK_READY;
-				}
-				//else...
-				else
-				{
-					//Set to blocked
-					m_TaskControl[i].taskStatus = TASK_NONE;
-
-				}
-				
-				//Make sure priorities are set appropriatly
-				m_TaskControl[i].cachedPriority = taskPriority;
+				//Set to ready
+				m_TaskControl[i].taskStatus = TASK_READY;
 			}
-
-			//Make sure we attach our ending task
-			//Make sure last task is set, is reserved. Set its ID as well
-			m_TaskControl[MAX_TASKS].taskStatus = TASK_MAIN;
-			m_TaskControl[MAX_TASKS].taskID = MAX_TASKS;
-			m_TaskControl[MAX_TASKS]._taskStack = _TASK_STACK_START_ADDRESS(MAX_TASKS);
-		
-			//Set the function
-			m_TaskControl[MAX_TASKS].task_func = mainfunc;
-		
-			//Set our default timeout
-			m_TaskControl[MAX_TASKS].timeout = 0;
-			m_TaskControl[MAX_TASKS].defaultTimeout = 0;
-		
-			//initialize stack pointer and program counter for our program execution
-			m_TaskControl[MAX_TASKS].taskExecutionContext.sp.ptr = ((uint8_t *)m_TaskControl[MAX_TASKS]._taskStack);
-			m_TaskControl[MAX_TASKS].taskExecutionContext.pc.ptr = mainfunc;
-		
-			//Set the max tasks control to the passed priority level
-			m_TaskControl[MAX_TASKS].priority = taskPriority;
-			m_TaskControl[MAX_TASKS].cachedPriority = taskPriority;
+			//else...
+			else
+			{
+				//Set to blocked
+				m_TaskControl[i].taskStatus = TASK_NONE;
+				m_TaskControl[i].priority = -1;
+			}
 			
-			//Set our current task to the last possible task, this way when entering for the first time we will loop to the first
-			m_CurrentTask = &m_TaskControl[MAX_TASKS];
+			//Make sure priorities are set appropriatly
+			m_TaskControl[i].cachedPriority = m_TaskControl[i].priority;
+		}
+	
+		//Make sure we attach our ending task
+		//Make sure last task is set, is reserved. Set its ID as well
+		m_TaskControl[MAX_TASKS].taskStatus = TASK_MAIN;
+		m_TaskControl[MAX_TASKS].taskID = MAX_TASKS;
+		m_TaskControl[MAX_TASKS]._taskStack = _TASK_STACK_START_ADDRESS(MAX_TASKS);
+	
+		//Set the function
+		m_TaskControl[MAX_TASKS].task_func = mainfunc;
+	
+		//Set our default timeout
+		m_TaskControl[MAX_TASKS].timeout = 0;
+		m_TaskControl[MAX_TASKS].defaultTimeout = 0;
+	
+		//initialize stack pointer and program counter for our program execution
+		m_TaskControl[MAX_TASKS].taskExecutionContext.sp.ptr = ((uint8_t *)m_TaskControl[MAX_TASKS]._taskStack);
+		m_TaskControl[MAX_TASKS].taskExecutionContext.pc.ptr = mainfunc;
+	
+		//Set the max tasks control to the passed priority level
+		m_TaskControl[MAX_TASKS].priority = taskPriority;
+		m_TaskControl[MAX_TASKS].cachedPriority = taskPriority;
 		
-			//Set our tasks running to true
-			m_blnTasksRunning = true;
-		
-			//Launch the ISR
-			_SCHEDULER_LAUNCH_ISR();
-		
-		);
-		
-		//wait while our tasks are running
-		while(m_blnTasksRunning == true);
-		
-		//Make sure our task index is reset back to 0 to allow us to more effectively
-		//launch tasks in the future. Covers some edge cases
-		m_TaskBlockCount = 0;
-	}
+		//Set our current task to the last possible task, this way when entering for the first time we will loop to the first
+		m_CurrentTask = &m_TaskControl[MAX_TASKS];
+	
+		//Set our tasks running to true
+		m_blnTasksRunning = true;
+	
+		//Launch the ISR
+		_SCHEDULER_LAUNCH_ISR();
+	
+	);
+	
+	//wait while our tasks are running
+	while(m_blnTasksRunning == true);
+	
+	//Make sure our task index is reset back to 0 to allow us to more effectively
+	//launch tasks in the future. Covers some edge cases
+	m_TaskBlockCount = 0;
+	
 
 }
 
@@ -260,7 +258,6 @@ void StartTasks(void *mainfunc, TaskPriorityLevel_t taskPriority)
 * \param id The position to attach at as well as the tasks ID
 * \ret The next id/index position
 */
-//TaskIndiceType_t AttachTaskAt(void (*func)(void), TaskIndiceType_t index)
 TaskIndiceType_t AttachTask(void *func, TaskIndiceType_t id)
 {
 	TASK_CRITICAL_SECTION (
