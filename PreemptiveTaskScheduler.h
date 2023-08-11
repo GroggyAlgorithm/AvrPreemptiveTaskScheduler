@@ -105,6 +105,10 @@ extern void _EmptyTask(void);
 //-----------------------------------
 
 
+extern int8_t KillOtherTasks(TaskIndiceType_t tid);
+extern TaskIndiceType_t GetActiveTaskCount();
+extern const TaskIndiceType_t GetTaskBlockCount();
+
 
 /**
 * \brief Schedules anything, but what should be a function, at the index passed. Can be dangerous if not used properly.

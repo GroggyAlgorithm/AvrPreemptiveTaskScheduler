@@ -61,6 +61,7 @@ inline TaskControl_t* GetTask(void *task_func)
 }
 
 
+
 /**
 * \brief Sets the default timeout for the task at the ID
 * \param id The task to set
@@ -604,6 +605,73 @@ void _EmptyTask(void)
 }
 
 
+
+/**
+* \brief Sets all tasks but the one passed to be killed
+* \return 1 unless something horrible happens
+*/
+int8_t KillOtherTasks(TaskIndiceType_t tid)
+{
+	TASK_CRITICAL_SECTION
+	(
+	
+		//Loop through all tasks and...
+		for(TaskIndiceType_t i = 0; i <= MAX_TASKS; i++)
+		{
+			//If we're currently on a task that's not the passed one...
+			if(m_TaskControl[i].taskID != tid)
+			{
+				//Set the tasks status to kill
+				m_TaskControl[i].taskStatus = TASK_KILL; 	
+			}
+			
+		}
+	
+	);
+	
+	//Return 1
+	return 1;
+}
+
+
+
+/**
+* \brief Counts the amount of active tasks
+*
+*/
+TaskIndiceType_t GetActiveTaskCount()
+{
+	TaskIndiceType_t count = 0;
+	
+	TASK_SWITCHING_LOCK()
+	{
+		
+		for(TaskIndiceType_t i = 0; i <= MAX_TASKS; i++)
+		{
+			if(m_TaskControl[i].taskStatus == TASK_READY || m_TaskControl[i].taskStatus == TASK_YIELD || m_TaskControl[i].taskStatus == TASK_SCHEDULED || m_TaskControl[i].taskStatus == TASK_SLEEP)
+			{
+				count++;
+			}
+			else if(m_TaskControl[i].taskStatus == TASK_MAIN && (TaskMemoryLocationType_t)m_TaskControl[MAX_TASKS].task_func != (TaskMemoryLocationType_t)_EmptyTask )
+			{
+				count++;
+			}
+		}
+	}
+	
+	return count;
+}
+
+
+
+/**
+* \brief Returns the task block count variables value
+*
+*/
+const TaskIndiceType_t GetTaskBlockCount()
+{
+	return m_TaskBlockCount;
+}
 
 
 #include "PreemptiveTaskSchedulerSwitching.c"
