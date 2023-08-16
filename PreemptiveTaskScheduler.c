@@ -674,6 +674,41 @@ const TaskIndiceType_t GetTaskBlockCount()
 }
 
 
+
+/**
+* \brief Returns true is the task is set to a status that is considered active, false if not
+* \param tid The tasks ID to check
+*/
+bool IsTaskActive(TaskIndiceType_t tid)
+{
+	//Variables
+	bool taskState = false;
+	
+	//Enter critical section to check...
+	TASK_CRITICAL_SECTION (
+		
+		//If the passed task id is within range...
+		if(tid >= 0 && tid <= MAX_TASKS)
+		{
+			//If our task status is acceptable...
+			if(m_TaskControl[tid].taskStatus == TASK_READY || m_TaskControl[tid].taskStatus == TASK_YIELD
+			|| m_TaskControl[tid].taskStatus == TASK_SCHEDULED || m_TaskControl[tid].taskStatus == TASK_MAIN
+			|| m_TaskControl[tid].taskStatus == TASK_SLEEP)
+			{
+				//Set our tasks state to true
+				taskState = true;
+			}
+		}
+	
+	);
+	
+	//Return our task state
+	return taskState;
+}
+
+
+
+
 #include "PreemptiveTaskSchedulerSwitching.c"
 
 
