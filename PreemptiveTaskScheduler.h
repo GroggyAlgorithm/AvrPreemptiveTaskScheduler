@@ -30,10 +30,10 @@ extern "C" {
 
 
 ///Atomic block for tasks, runs with no interrupts and restores post interrupt. When using this version, it is safer to use everywhere
-#define TASK_CRITICAL_SECTION(...) __asm__ __volatile__("cli \n\t":::"memory"); __VA_ARGS__;  __asm__ __volatile__("sei \n\t":::"memory");
+#define TASK_CRITICAL_SECTION(...) SCHEDULER_ASM_INTERRUPTS_OFF(); __VA_ARGS__;  SCHEDULER_ASM_INTERRUPTS_ON();
 
 ///Atomic block for tasks, runs with no interrupts and restores post interrupt, executing the arguments passed before entering the 'loop' but after disabling interrupts. it will break everything if used poorly.
-#define TASK_CRITICAL_SECTION_LOCK(...) __asm__ __volatile__("cli \n\t":::"memory"); __VA_ARGS__; for(unsigned char __crit_locker __attribute__((__cleanup__(__iExitCritical))) = 1, __crit_blocker = 1; __crit_blocker != 0; __crit_blocker = 0)
+#define TASK_CRITICAL_SECTION_LOCK(...) SCHEDULER_ASM_INTERRUPTS_OFF(); __VA_ARGS__; for(unsigned char __crit_locker __attribute__((__cleanup__(__iExitCritical))) = 1, __crit_blocker = 1; __crit_blocker != 0; __crit_blocker = 0)
 
 ///Block section for running with the schedulers switching disabled. It would be a very bad time to yield during here.
 #define TASK_SWITCHING_LOCK(...) for(unsigned char __swit_locker __attribute__((__cleanup__(__iExitSchedulerPause))) = 1, __swit_blocker = __iEnterSchedulerPause(); __swit_blocker != 0; __swit_blocker = 0)
@@ -170,24 +170,18 @@ __attribute__ ((unused)) static TaskIndiceType_t ScheduleTask(void (*func)(void)
 
 
 
-
-
-
-
-
-
 static __attribute__((always_inline)) inline void __iExitTask(const TaskIndiceType_t *__s)
 {
 	while(KillTask(*__s));
 }
 static __attribute__((always_inline)) inline unsigned char __iEnterCritical(void)
 {
-	__asm__ __volatile__("cli \n\t":::"memory");
+	SCHEDULER_ASM_INTERRUPTS_OFF();
 	return 1;
 }
 static __attribute__((always_inline)) inline void __iExitCritical(const unsigned char *__s)
 {
-	__asm__ volatile ("sei \n\t" ::: "memory");
+	SCHEDULER_ASM_INTERRUPTS_ON();
 }
 static __attribute__((always_inline)) inline void __iExitSem(const unsigned char *__s)
 {

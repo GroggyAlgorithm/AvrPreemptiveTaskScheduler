@@ -489,7 +489,7 @@ __attribute__ ((weak)) void _TaskSwitch(void)
 SCHEDULER_INTERRUPT_KEYWORD(SCHEDULER_INT_VECTOR, ISR_NAKED)
 {
 	//Make sure other interrupts are disabled
-	__asm__ __volatile__("cli \n\t":::"memory");
+	SCHEDULER_ASM_INTERRUPTS_OFF();
 	
 	//Save our tasks context
 	ASM_SAVE_GLOBAL_PTR_CONTEXT(m_CurrentTask);
@@ -504,8 +504,10 @@ SCHEDULER_INTERRUPT_KEYWORD(SCHEDULER_INT_VECTOR, ISR_NAKED)
 	_SCHEDULER_LOAD_ISR_REG();
 
 	//Make sure interrupts are re-enabled
-	__asm__ __volatile__("sei \n\t":::"memory");
-	__asm__ __volatile__("reti \n"::);
+	SCHEDULER_ASM_INTERRUPTS_ON();
+	
+	//Exit from the ISR
+	__SCHEDULER_ISR_ASM_RETURN();
 }
 
 

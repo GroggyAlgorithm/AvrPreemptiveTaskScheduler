@@ -8,6 +8,21 @@
 
 
 
+//Check for device type and command type
+#if defined(__AVR)
+
+///Disables global interrupts
+#define SCHEDULER_ASM_INTERRUPTS_OFF()		__asm__ __volatile__("cli \n\t":::"memory")
+
+///Enables global interrupts
+#define SCHEDULER_ASM_INTERRUPTS_ON()		__asm__ __volatile__("sei \n\t":::"memory")
+
+///Return statement from interrupt
+#define __SCHEDULER_ISR_ASM_RETURN()			__asm__ __volatile__("reti \n"::)
+
+#endif
+
+
 
 /*
 	ASM Constants

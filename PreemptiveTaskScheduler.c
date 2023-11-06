@@ -259,7 +259,7 @@ void StartTasks(void *mainfunc, TaskPriorityLevel_t taskPriority)
 * \brief Attaches a task to the available tasks
 * \param func The function for running the task
 * \param id The position to attach at as well as the tasks ID
-* \ret The next id/index position
+* \return The next id/index position
 */
 TaskIndiceType_t AttachTask(void *func, TaskIndiceType_t id)
 {

@@ -7,18 +7,9 @@
 #define __PREEMPTIVETASKSCHEDULERCONFIG_H___	1
 
 
-
-
-
 //Check for device type and command type
 #if defined(__AVR)
-
 #include <avr/io.h>
-
-#define SCHEDULER_ASM_INTERRUPTS_OFF()		__asm__ __volatile__("cli \n\t":::"memory")		
-#define SCHEDULER_ASM_INTERRUPTS_ON()		__asm__ __volatile__("sei \n\t":::"memory")
-
-
 #endif
 
 
