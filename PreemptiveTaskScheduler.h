@@ -24,6 +24,11 @@ extern "C" {
 #endif /* __cplusplus */
 
 
+#include "PreemptiveTaskSchedulerConfig.h"
+#include "PreemptiveTaskSchedulerTypes.h"
+#include "PreemptiveTaskSchedulerASM.h"
+
+
 ///Atomic block for tasks, runs with no interrupts and restores post interrupt. When using this version, it is safer to use everywhere
 #define TASK_CRITICAL_SECTION(...) __asm__ __volatile__("cli \n\t":::"memory"); __VA_ARGS__;  __asm__ __volatile__("sei \n\t":::"memory");
 
@@ -53,9 +58,7 @@ extern "C" {
 
 
 
-#include "PreemptiveTaskSchedulerConfig.h"
-#include "PreemptiveTaskSchedulerTypes.h"
-#include "PreemptiveTaskSchedulerASM.h"
+
 
 
 
