@@ -269,15 +269,18 @@ TaskIndiceType_t AttachTask(void *func, TaskIndiceType_t id)
 		if(id < MAX_TASKS && id >= 0)
 		{
 		
-			//Check for allowances
-			if((TaskMemoryLocationType_t)_TASK_STACK_START_ADDRESS(id) < RAMSTART)
-			{
-				return id;	
-			}
+			#ifdef RAMSTART
+			
+				//Check for allowances
+				if((TaskMemoryLocationType_t)_TASK_STACK_START_ADDRESS(id) < RAMSTART)
+				{
+					return id;	
+				}
+				
+			#endif
 		
 			//Set the memory location for our task stack
 			m_TaskControl[id]._taskStack = _TASK_STACK_START_ADDRESS(id);
-				
 		
 			//Set the task ID
 			m_TaskControl[id].taskID = id;
