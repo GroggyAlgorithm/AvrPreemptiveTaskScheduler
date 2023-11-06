@@ -56,6 +56,17 @@ A variable or abstract data type used to control access to a common resource
 
 <br>
 
+### Examples && Use Guide
+
+<br>
+
+I need to add explanations on use
+
+<hr>
+
+
+<br>
+
 
 ### Classes...?
 
